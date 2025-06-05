@@ -1,0 +1,3 @@
+# Story
+
+The world of Elysium is fractured, overrun by chaotic energies that manifest as relentless monster hordes. Survival in the Descent is a moment-to-moment struggle against overwhelming odds. Whispers persist of the "Loot Survivor" dungeons – pocket dimensions accessible only to those who prove their resilience against the surface threats. These on-chain realms are said to house unique, powerful beasts and artifacts of immense value, representing both the ultimate challenge and the only true path to escaping the perpetual chaos. The player's narrative in Elysium Descent is one of desperate survival, pushing their limits to earn passage to these legendary dungeons and uncover their secrets.
