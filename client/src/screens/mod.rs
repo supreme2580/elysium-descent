@@ -1,4 +1,4 @@
-// mod gameplay;
+mod gameplay;
 mod loading;
 mod main_menu;
 mod settings;
@@ -27,9 +27,19 @@ pub struct MainTrack;
 pub(super) fn plugin(app: &mut App) {
     app.init_state::<Screen>()
         .add_systems(Startup, initial_state_setup)
-        .add_plugins((main_menu::plugin, settings::plugin, loading::plugin));
+        .add_systems(Update, handle_new_game_transition)
+        .add_plugins((main_menu::plugin, settings::plugin, loading::plugin, gameplay::plugin));
 }
 
 fn initial_state_setup(mut next_state: ResMut<NextState<Screen>>) {
     next_state.set(Screen::Loading);
+}
+
+fn handle_new_game_transition(
+    mut next_state: ResMut<NextState<Screen>>,
+    current_state: Res<State<Screen>>,
+) {
+    if current_state.get() == &Screen::NewGame {
+        next_state.set(Screen::GamePlay);
+    }
 }

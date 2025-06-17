@@ -67,11 +67,11 @@ struct Player;
 
 #[derive(Debug, InputAction)]
 #[input_action(output = Vec2)]
-struct Move;
+pub struct Move;
 
 #[derive(Debug, InputAction)]
 #[input_action(output = bool)]
-struct Jump;
+pub struct Jump;
 
 /// Input context for the Elysium game
 #[derive(InputContext)]

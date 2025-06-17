@@ -18,14 +18,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "dojo_inventory_mgmt"
+version = "0.0.1"
+dependencies = [
+ "dojo",
+]
+
+[[package]]
 name = "dojo_plugin"
 version = "2.10.1"
 source = "git+https://github.com/dojoengine/dojo?tag=v1.5.0#812f17c9c57fd057d0bf1e648a591ea0ca9ea718"
 
 [[package]]
-name = "dojo_starter"
+name = "dojo_survivor"
+version = "0.0.1"
+dependencies = [
+ "dojo",
+]
+
+[[package]]
+name = "elysium_descent"
 version = "1.5.0"
 dependencies = [
  "dojo",
  "dojo_cairo_test",
+ "dojo_inventory_mgmt",
+ "dojo_survivor",
 ]

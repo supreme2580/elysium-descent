@@ -2,16 +2,92 @@
 name = "client"
 version = "0.1.0"
 edition = "2024"
+categories = ["game"]
+description = "Elysium Descent is a roguelike game inspired by lootsurvivor built with Bevy and Dojo"
+homepage = "https://realmofra.com"
+authors = [
+  "Okhai Omotuebe <okhaio@protonmail.com>"
+]
+keywords = ["game", "starknet", "bevy", "focg", "roguelike"]
+repository = "https://github.com/realmofra/elysium_descent"
 
 [dependencies]
-bevy.workspace = true
-bevy_asset_loader.workspace = true
-bevy_enhanced_input.workspace = true
-bevy_kira_audio.workspace = true
-bevy_lunex.workspace = true
-log.workspace = true
-starknet.workspace = true
-tracing.workspace = true
+avian3d = { version = "0.3.1", features = ["debug-plugin"] }
+bevy = { version = "0.16.0", default-features = false, features = [
+  "animation",
+  "bevy_asset",
+  "bevy_color",
+  "bevy_core_pipeline",
+  "bevy_gilrs",
+  "bevy_gizmos",
+  "bevy_gltf",
+  "bevy_mesh_picking_backend",
+  "bevy_pbr",
+  "bevy_picking",
+  "bevy_render",
+  "bevy_scene",
+  "bevy_sprite",
+  "bevy_sprite_picking_backend",
+  "bevy_state",
+  "bevy_text",
+  "bevy_ui",
+  "bevy_ui_picking_backend",
+  "bevy_window",
+  "bevy_winit",
+  "custom_cursor",
+  "hdr",
+  "multi_threaded",
+  "png",
+  "jpeg",
+  "smaa_luts",
+  "sysinfo_plugin",
+  "tonemapping_luts",
+  "webgl2",
+  #"webgpu",
+  "x11",
+]}
+bevy_asset_loader = "0.23.0"
+bevy_enhanced_input = "0.12.0"
+bevy_gltf_animation = "0.2.0"
+bevy_kira_audio = "0.23.0"
+bevy_lunex = "0.4.1"
+dojo_bevy_plugin = { git = "https://github.com/okhaimie-dev/dojo.bevy.git", branch = "main" }
+log = { version = "0.4", features = [
+    "max_level_debug",
+    "release_max_level_warn",
+] }
+once_cell = "1.21.3"
+starknet = "0.15.1"
+tracing = { version = "0.1", features = [
+    "max_level_debug",
+    "release_max_level_warn",
+] }
 
-[lints]
-workspace = true
+# Idiomatic Bevy code often triggers these lints, and the CI workflow treats
+# In some cases they may still signal poor code quality however, so consider
+[lints.clippy]
+# Bevy supplies arguments to systems via dependency injection, so it's natur
+# request more than 7 arguments -- which triggers this lint.
+too_many_arguments = "allow"
+# Queries that access many components may trigger this lint.
+type_complexity = "allow"
+
+# Enable a small amount of optimization in the dev profile.
+[profile.dev]
+opt-level = 1
+
+# Enable a large amount of optimization in the dev profile for dependencies.
+[profile.dev.package."*"]
+opt-level = 3
+
+# Remove expensive debug assertions due to <https://github.com/bevyengine/bevy/issues/14291>
+[profile.dev.package.wgpu-types]
+debug-assertions = false
+
+[profile.release]
+# Compile the entire crate as one unit.
+# Slows compile times, marginal improvements.
+codegen-units = 1
+# Do a second optimization pass over the entire program, including dependencies.
+# Slows compile times, marginal improvements.
+lto = "thin"

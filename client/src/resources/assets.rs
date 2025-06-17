@@ -13,7 +13,8 @@ impl Plugin for AssetsPlugin {
                 .continue_to_state(Screen::MainMenu)
                 .load_collection::<UiAssets>()
                 .load_collection::<AudioAssets>()
-                .load_collection::<FontAssets>(), // .load_collection::<ModelAssets>(),
+                .load_collection::<FontAssets>()
+                .load_collection::<ModelAssets>(),
         );
     }
 }
@@ -65,17 +66,20 @@ pub struct FontAssets {
 }
 
 // Model Assets (for future use)
-// #[derive(AssetCollection, Resource)]
-// pub struct ModelAssets {
-//     #[asset(path = "models/Fox.glb")]
-//     pub fox: Handle<Scene>,
+#[derive(AssetCollection, Resource)]
+pub struct ModelAssets {
+    #[asset(path = "models/book.glb#Scene0")]
+    pub book: Handle<Scene>,
 
-//     #[asset(path = "models/egg.glb")]
-//     pub egg: Handle<Scene>,
+    #[asset(path = "models/first-aid-kit.glb#Scene0")]
+    pub first_aid_kit: Handle<Scene>,
 
-//     #[asset(path = "models/fantasy_environment_level_set.glb")]
-//     pub environment: Handle<Scene>,
-// }
+    #[asset(path = "models/player.glb")]
+    pub player: Handle<Gltf>,
+
+    #[asset(path = "models/environment.glb#Scene0")]
+    pub environment: Handle<Scene>,
+}
 
 // Movie/Video Assets
 // #[derive(AssetCollection, Resource)]
