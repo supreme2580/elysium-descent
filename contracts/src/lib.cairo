@@ -4,6 +4,7 @@ pub mod systems {
 
 pub mod models;
 
-pub mod tests {
+#[cfg(test)]
+mod tests {
     mod test_world;
 }

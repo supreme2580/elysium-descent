@@ -2,39 +2,38 @@ use avian3d::prelude::*;
 use bevy::prelude::*;
 use bevy_gltf_animation::prelude::*;
 
-use super::Screen;
+use super::{Screen, despawn_scene};
 use crate::assets::ModelAssets;
 use crate::systems::character_controller::{
     CharacterController, CharacterControllerBundle, CharacterControllerPlugin, setup_idle_animation,
 };
-use crate::systems::collectibles::{CollectiblesPlugin, spawn_collectible};
+use crate::keybinding;
+use bevy_enhanced_input::prelude::*;
+use crate::systems::collectibles::{CollectiblesPlugin, spawn_collectible, spawn_interactable_book, CollectibleType};
 use crate::systems::collectibles_config::COLLECTIBLES;
 
 // ===== PLUGIN SETUP =====
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(Screen::GamePlay), PlayingScene::spawn_environment)
-        .add_systems(Update, camera_follow_player)
+    app.add_systems(OnEnter(Screen::GamePlay), (PlayingScene::spawn_environment, set_gameplay_clear_color))
+        .add_systems(Update, camera_follow_player.run_if(in_state(Screen::GamePlay)))
         .add_systems(OnExit(Screen::GamePlay), despawn_scene::<PlayingScene>)
         .add_plugins(PhysicsPlugins::default())
         // .add_plugins(PhysicsDebugPlugin::default())
         .add_plugins(CharacterControllerPlugin)
         .add_plugins(GltfAnimationPlugin)
-        .add_plugins(CollectiblesPlugin)
-        .insert_resource(ClearColor(Color::srgb(0.529, 0.808, 0.922))); // Sky blue color
+        .add_plugins(CollectiblesPlugin);
 }
 
 // ===== SYSTEMS =====
 
-fn despawn_scene<S: Component>(mut commands: Commands, query: Query<Entity, With<S>>) {
-    for entity in &query {
-        commands.entity(entity).despawn();
-    }
+fn set_gameplay_clear_color(mut commands: Commands) {
+    commands.insert_resource(ClearColor(Color::srgb(0.529, 0.808, 0.922))); // Sky blue color
 }
 
 fn camera_follow_player(
     player_query: Query<&Transform, With<CharacterController>>,
-    mut camera_query: Query<&mut Transform, (With<Camera>, Without<CharacterController>)>,
+    mut camera_query: Query<&mut Transform, (With<Camera3d>, With<PlayingScene>, Without<CharacterController>)>,
     time: Res<Time>,
 ) {
     if let Ok(player_transform) = player_query.single() {
@@ -57,7 +56,7 @@ fn camera_follow_player(
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 struct PlayingScene;
 
 #[derive(Component)]
@@ -79,6 +78,7 @@ impl PlayingScene {
         commands.spawn((
             Name::new("Environment"),
             EnvironmentMarker,
+            PlayingScene, // Add scene marker to ensure cleanup
             SceneRoot(scene_handle),
             Transform {
                 translation: Vec3::new(0.0, -1.5, 0.0),
@@ -104,6 +104,7 @@ impl PlayingScene {
                 std::f32::consts::FRAC_PI_4,
                 0.0,
             )),
+            PlayingScene, // Add scene marker to ensure cleanup
         ));
 
         // Add player
@@ -120,13 +121,32 @@ impl PlayingScene {
                 Friction::new(0.5),
                 Restitution::new(0.0),
                 GravityScale(1.0),
+                // Add enhanced input actions for this player
+                Actions::<keybinding::Player>::default(),
+                PlayingScene, // Add scene marker to ensure cleanup
                 // DebugRender::default(),
             ))
             .observe(setup_idle_animation);
 
         // Spawn collectibles using imported array
         for config in COLLECTIBLES.iter() {
-            spawn_collectible(&mut commands, &assets, config.clone());
+            match config.collectible_type {
+                CollectibleType::Book => {
+                    // Use the special interactable book spawning function
+                    spawn_interactable_book(
+                        &mut commands,
+                        &assets,
+                        config.position,
+                        config.scale,
+                        config.on_collect.clone(),
+                        PlayingScene,
+                    );
+                }
+                _ => {
+                    // Use normal collectible spawning for other items
+                    spawn_collectible(&mut commands, &assets, config.clone(), PlayingScene);
+                }
+            }
         }
 
         // Add camera

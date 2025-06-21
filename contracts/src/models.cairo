@@ -1,102 +1,118 @@
-use starknet::{ContractAddress};
+use starknet::ContractAddress;
 
-#[derive(Copy, Drop, Serde, Debug)]
-#[dojo::model]
-pub struct Moves {
-    #[key]
-    pub player: ContractAddress,
-    pub remaining: u8,
-    pub last_direction: Option<Direction>,
-    pub can_move: bool,
+// Game management models
+#[derive(Serde, Copy, Drop, Introspect, PartialEq)]
+pub enum GameStatus {
+    NotStarted,
+    InProgress,
+    Paused,
+    Completed,
 }
 
-#[derive(Drop, Serde, Debug)]
-#[dojo::model]
-pub struct DirectionsAvailable {
-    #[key]
-    pub player: ContractAddress,
-    pub directions: Array<Direction>,
-}
-
-#[derive(Copy, Drop, Serde, Debug)]
-#[dojo::model]
-pub struct Position {
-    #[key]
-    pub player: ContractAddress,
-    pub vec: Vec2,
-}
-
-#[derive(Copy, Drop, Serde, Debug)]
-#[dojo::model]
-pub struct PositionCount {
-    #[key]
-    pub identity: ContractAddress,
-    pub position: Span<(u8, u128)>,
-}
-
-
-#[derive(Serde, Copy, Drop, Introspect, PartialEq, Debug)]
-pub enum Direction {
-    Left,
-    Right,
-    Up,
-    Down,
-}
-
-
-#[derive(Copy, Drop, Serde, IntrospectPacked, Debug)]
-pub struct Vec2 {
-    pub x: u32,
-    pub y: u32,
-}
-
-
-impl DirectionIntoFelt252 of Into<Direction, felt252> {
-    fn into(self: Direction) -> felt252 {
+impl GameStatusIntoFelt252 of Into<GameStatus, felt252> {
+    fn into(self: GameStatus) -> felt252 {
         match self {
-            Direction::Left => 1,
-            Direction::Right => 2,
-            Direction::Up => 3,
-            Direction::Down => 4,
+            GameStatus::NotStarted => 0,
+            GameStatus::InProgress => 1,
+            GameStatus::Paused => 2,
+            GameStatus::Completed => 3,
         }
     }
 }
 
-impl OptionDirectionIntoFelt252 of Into<Option<Direction>, felt252> {
-    fn into(self: Option<Direction>) -> felt252 {
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct Game {
+    #[key]
+    pub game_id: u32,
+    pub player: ContractAddress,
+    pub status: GameStatus,
+    pub current_level: u32,
+    pub created_at: u64,
+    pub score: u32,
+}
+
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct PlayerStats {
+    #[key]
+    pub player: ContractAddress,
+    pub health: u32,
+    pub max_health: u32,
+    pub level: u32,
+    pub experience: u32,
+    pub items_collected: u32,
+}
+
+// Global game counter for unique game IDs
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct GameCounter {
+    #[key]
+    pub counter_id: u32, // Use constant GAME_COUNTER_ID
+    pub next_game_id: u32,
+}
+
+// Constants for special identifiers
+pub const GAME_COUNTER_ID: u32 = 999999999;
+
+// Inventory models
+#[derive(Serde, Copy, Drop, Introspect, PartialEq)]
+pub enum ItemType {
+    HealthPotion,
+    SurvivalKit,
+    Book,
+}
+
+impl ItemTypeIntoFelt252 of Into<ItemType, felt252> {
+    fn into(self: ItemType) -> felt252 {
         match self {
-            Option::None => 0,
-            Option::Some(d) => d.into(),
+            ItemType::HealthPotion => 1,
+            ItemType::SurvivalKit => 2,
+            ItemType::Book => 3,
         }
     }
 }
 
-#[generate_trait]
-impl Vec2Impl of Vec2Trait {
-    fn is_zero(self: Vec2) -> bool {
-        if self.x - self.y == 0 {
-            return true;
-        }
-        false
-    }
-
-    fn is_equal(self: Vec2, b: Vec2) -> bool {
-        self.x == b.x && self.y == b.y
-    }
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct PlayerInventory {
+    #[key]
+    pub player: ContractAddress,
+    pub health_potions: u32,
+    pub survival_kits: u32,
+    pub books: u32,
+    pub capacity: u32,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{Vec2, Vec2Trait};
-
-    #[test]
-    fn test_vec_is_zero() {
-        assert(Vec2Trait::is_zero(Vec2 { x: 0, y: 0 }), 'not zero');
-    }
-
-    #[test]
-    fn test_vec_is_equal() {
-        let position = Vec2 { x: 420, y: 0 };
-        assert(position.is_equal(Vec2 { x: 420, y: 0 }), 'not equal');
-    }
+// Level items spawned per level
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct LevelItems {
+    #[key]
+    pub game_id: u32,
+    #[key]
+    pub level: u32,
+    pub total_health_potions: u32,
+    pub total_survival_kits: u32,
+    pub total_books: u32,
+    pub collected_health_potions: u32,
+    pub collected_survival_kits: u32,
+    pub collected_books: u32,
 }
+
+// Individual item instances in the world
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct WorldItem {
+    #[key]
+    pub game_id: u32,
+    #[key]
+    pub item_id: u32,
+    pub item_type: ItemType,
+    pub x_position: u32,
+    pub y_position: u32,
+    pub is_collected: bool,
+    pub level: u32,
+}
+

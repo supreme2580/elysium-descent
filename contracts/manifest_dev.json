@@ -1,8 +1,8 @@
 {
   "world": {
-    "class_hash": "0x2660e42e300e85d14619e31ab1c51520a98ecd6ff97accefb40b62b260aeafc",
-    "address": "0x4a8ed1a46118db416888f6b98caf1e4c64bb33a20f89d98cbc59da46856fb7e",
-    "seed": "dojo_starter",
+    "class_hash": "0x4c60dc46a8ca8bb47675b7b914053cef769afbf0e340523187336b72bd71d1f",
+    "address": "0x1d3be0144b9a1d96f8ea55ad581c5a1ab2281837821c6e9c1aa6c37b35b7d5f",
+    "seed": "elysium_001",
     "name": "Dojo starter",
     "entrypoints": [
       "uuid",
@@ -693,6 +693,22 @@
           },
           {
             "type": "function",
+            "name": "owners_count",
+            "inputs": [
+              {
+                "name": "resource",
+                "type": "core::felt252"
+              }
+            ],
+            "outputs": [
+              {
+                "type": "core::integer::u64"
+              }
+            ],
+            "state_mutability": "view"
+          },
+          {
+            "type": "function",
             "name": "is_writer",
             "inputs": [
               {
@@ -1312,8 +1328,8 @@
   },
   "contracts": [
     {
-      "address": "0x76461d50a37c5c6f8167cd14ddc641cb98b4ef608f36f67fdf6748338b2626c",
-      "class_hash": "0x3960b38c19aec8dfa20bac3625b3d63c1553601ec9db43197ed20910019f2a7",
+      "address": "0x3e808dd3f605913362dd9acf16a9853eb824d1619c182b84199d7424464f670",
+      "class_hash": "0x5d98e4813136fb743de87bc7b7351fa37fcf4393f8a02755b96b16d9365c538",
       "abi": [
         {
           "type": "impl",
@@ -1368,52 +1384,209 @@
         {
           "type": "impl",
           "name": "ActionsImpl",
-          "interface_name": "dojo_starter::systems::actions::IActions"
+          "interface_name": "elysium_descent::systems::actions::IActions"
         },
         {
           "type": "enum",
-          "name": "dojo_starter::models::Direction",
+          "name": "core::bool",
           "variants": [
             {
-              "name": "Left",
+              "name": "False",
               "type": "()"
             },
             {
-              "name": "Right",
-              "type": "()"
-            },
-            {
-              "name": "Up",
-              "type": "()"
-            },
-            {
-              "name": "Down",
+              "name": "True",
               "type": "()"
             }
           ]
         },
         {
+          "type": "struct",
+          "name": "elysium_descent::models::PlayerStats",
+          "members": [
+            {
+              "name": "player",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "health",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "max_health",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "level",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "experience",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "items_collected",
+              "type": "core::integer::u32"
+            }
+          ]
+        },
+        {
+          "type": "struct",
+          "name": "elysium_descent::models::PlayerInventory",
+          "members": [
+            {
+              "name": "player",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "health_potions",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "survival_kits",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "books",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "capacity",
+              "type": "core::integer::u32"
+            }
+          ]
+        },
+        {
+          "type": "struct",
+          "name": "elysium_descent::models::LevelItems",
+          "members": [
+            {
+              "name": "game_id",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "level",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "total_health_potions",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "total_survival_kits",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "total_books",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "collected_health_potions",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "collected_survival_kits",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "collected_books",
+              "type": "core::integer::u32"
+            }
+          ]
+        },
+        {
           "type": "interface",
-          "name": "dojo_starter::systems::actions::IActions",
+          "name": "elysium_descent::systems::actions::IActions",
           "items": [
             {
               "type": "function",
-              "name": "spawn",
+              "name": "create_game",
               "inputs": [],
+              "outputs": [
+                {
+                  "type": "core::integer::u32"
+                }
+              ],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "start_level",
+              "inputs": [
+                {
+                  "name": "game_id",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "level",
+                  "type": "core::integer::u32"
+                }
+              ],
               "outputs": [],
               "state_mutability": "external"
             },
             {
               "type": "function",
-              "name": "move",
-              "inputs": [
+              "name": "pickup_item",
+              "inputs": [],
+              "outputs": [
                 {
-                  "name": "direction",
-                  "type": "dojo_starter::models::Direction"
+                  "type": "core::bool"
                 }
               ],
-              "outputs": [],
               "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "get_player_stats",
+              "inputs": [
+                {
+                  "name": "player",
+                  "type": "core::starknet::contract_address::ContractAddress"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "elysium_descent::models::PlayerStats"
+                }
+              ],
+              "state_mutability": "view"
+            },
+            {
+              "type": "function",
+              "name": "get_player_inventory",
+              "inputs": [
+                {
+                  "name": "player",
+                  "type": "core::starknet::contract_address::ContractAddress"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "elysium_descent::models::PlayerInventory"
+                }
+              ],
+              "state_mutability": "view"
+            },
+            {
+              "type": "function",
+              "name": "get_level_items",
+              "inputs": [
+                {
+                  "name": "game_id",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "level",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "elysium_descent::models::LevelItems"
+                }
+              ],
+              "state_mutability": "view"
             }
           ]
         },
@@ -1516,7 +1689,7 @@
         },
         {
           "type": "event",
-          "name": "dojo_starter::systems::actions::actions::Event",
+          "name": "elysium_descent::systems::actions::actions::Event",
           "kind": "enum",
           "variants": [
             {
@@ -1533,11 +1706,12 @@
         }
       ],
       "init_calldata": [],
-      "tag": "dojo_starter-actions",
-      "selector": "0x7a1c71029f2d0b38e3ac89b09931d08b6e48417e079c289ff19a8698d0cba33",
+      "tag": "elysium_001-actions",
+      "selector": "0x17b04de24937921ae824b20f9fa2a84b1051c44dc9d8fb42571af03043347dd",
       "systems": [
-        "spawn",
-        "move",
+        "create_game",
+        "start_level",
+        "pickup_item",
         "upgrade"
       ]
     }
@@ -1546,35 +1720,59 @@
   "models": [
     {
       "members": [],
-      "class_hash": "0x46d4db177d7edf355bf1e51fa72023171232b928ef3b9467dbd541611da5f83",
-      "tag": "dojo_starter-DirectionsAvailable",
-      "selector": "0x77844f1facb51e60e546a9832d56c6bd04fa23be4fd5b57290caae5e9a3c1e4"
+      "class_hash": "0x6fb55c36637065aaf4597edc971d2a1e84d5fb4b22a795775e9d57629032528",
+      "tag": "elysium_001-Game",
+      "selector": "0xa987b32e111bf403d49258d1d30dfa5b57a06bc29533a0d202663fac1751a7"
     },
     {
       "members": [],
-      "class_hash": "0x5a3dcd4bf5a0e6fff9ca88dcd77c6b49f1a33a1b9bbea8ce5aa5290e9470070",
-      "tag": "dojo_starter-Moves",
-      "selector": "0x2a29373f1af8348bd366a990eb3a342ef2cbe5e85160539eaca3441a673f468"
+      "class_hash": "0x6dd049b8f7df7959b91ab4c56d2231712c18fe961c5285c338dbe71f5a4b95a",
+      "tag": "elysium_001-GameCounter",
+      "selector": "0x74e7cfa199788e659871ee85c1ef7ded70baf1145ddac6f02c6615469b685c4"
     },
     {
       "members": [],
-      "class_hash": "0x7231f1cec2b0ba37c39e6d919d35648d07d86a687680aa92ccb0d65fe5af17e",
-      "tag": "dojo_starter-Position",
-      "selector": "0x2ac8b4c190f7031b9fc44312e6b047a1dce0b3f2957c33a935ca7846a46dd5b"
+      "class_hash": "0x6917225e68e72610c067d97c26cffc444073d5658e1b0530c1c4d5faba89f7e",
+      "tag": "elysium_001-LevelItems",
+      "selector": "0x1b43a0f5afc603528f64f41b4b81bf81e206e63f41b813d6ec6a5c0056ab015"
     },
     {
       "members": [],
-      "class_hash": "0x4518971c1abf10a6c1c40f8f72fc34816dee4752d66f0f2b9d29a62f4fb3310",
-      "tag": "dojo_starter-PositionCount",
-      "selector": "0x44e8e8c3aea54e97e01563cacc08abb4a8ce8c468cd4d3a332bca12bfc2290d"
+      "class_hash": "0x41634bb8266abacb5c8ae1b09c9f1462ae62618720bba0ceb68618b59b2c56f",
+      "tag": "elysium_001-PlayerInventory",
+      "selector": "0x58734cc349cd6a0779b7b50b4330bb2a07a997d903675b890847d0f9da79e"
+    },
+    {
+      "members": [],
+      "class_hash": "0x9141def6661467339be326d1fe83907380648097a8de4e1cba85f7d79170fc",
+      "tag": "elysium_001-PlayerStats",
+      "selector": "0x575e5002176ad15c9c2347a2b2ad6361fdf55c4632a94a14aef299c8845b317"
+    },
+    {
+      "members": [],
+      "class_hash": "0x3437f457088ae51dbfe6fe31e85fd897447698c38565f8343bc0fdd48acfbb4",
+      "tag": "elysium_001-WorldItem",
+      "selector": "0x31a6bead5e4e4e91a28bcd367c9e04b6b275f408ec2af3ef74fae35add235ef"
     }
   ],
   "events": [
     {
       "members": [],
-      "class_hash": "0x49f539cc331573abc29d729a65824485514906457af4049ff148ffe421520cb",
-      "tag": "dojo_starter-Moved",
-      "selector": "0x504403e5c02b6442527721fc464d9ea5fc8f1ee600ab5ccd5c0845d36fd45f1"
+      "class_hash": "0x74542073f0069ea28b4cf8dd7d5cf55eb219a7f353841a872c511b87a637e",
+      "tag": "elysium_001-GameCreated",
+      "selector": "0xabe434a56ead8d669a4a03d1a7d0f96947e6f0a1f84ff92767132f38a9ee0"
+    },
+    {
+      "members": [],
+      "class_hash": "0x34d8eee2566245293deca7cec62e6aadb8ca5044328945c5568f25174478266",
+      "tag": "elysium_001-ItemPickedUp",
+      "selector": "0x596fa771166fd5f4dfec561ed98b878f7518675926c61a86d8671dd1a86243b"
+    },
+    {
+      "members": [],
+      "class_hash": "0x51ab76764b272c5abb441d54b44efddd4152bc85dc1eba5a7e867533c119b42",
+      "tag": "elysium_001-LevelStarted",
+      "selector": "0x6baa58d422637916a19f2a55ecb8780ec1b0262d5f982aa76487a935ec58cd9"
     }
   ],
   "external_contracts": []

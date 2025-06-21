@@ -19,7 +19,7 @@ fn label_widget(window_height: f32, font: Handle<Font>, text: impl Into<String> 
                 Text::new(text.into()),
                 TextFont {
                     font_size: window_height * 0.04,
-                    font: font,
+                    font,
                     ..default()
                 },
                 TextColor::WHITE,
@@ -47,7 +47,7 @@ fn volume_display_widget(window_height: f32, font: Handle<Font>, text: impl Into
                 Text::new(text.into()),
                 TextFont {
                     font_size: window_height * 0.03,
-                    font: font,
+                    font,
                     ..default()
                 },
                 TextColor::WHITE,
@@ -76,7 +76,7 @@ fn button_widget(window_height: f32, font: Handle<Font>, text: impl Into<String>
                 Text::new(text.into()),
                 TextFont {
                     font_size: window_height * 0.05,
-                    font: font,
+                    font,
                     ..default()
                 },
                 TextColor(Color::BLACK),

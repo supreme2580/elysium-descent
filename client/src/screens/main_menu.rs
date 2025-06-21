@@ -6,12 +6,21 @@ use crate::assets::{FontAssets, UiAssets};
 use crate::ui::styles::ElysiumDescentColorPalette;
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(Screen::MainMenu), spawn)
+    app.add_systems(OnEnter(Screen::MainMenu), (reset_ui_camera, spawn).chain())
         .add_systems(OnExit(Screen::MainMenu), despawn_scene::<MainMenuScene>);
 }
 
 #[derive(Component)]
 struct MainMenuScene;
+
+/// Reset the UI camera to its proper state when entering main menu
+fn reset_ui_camera(mut ui_cameras: Query<&mut Transform, (With<Camera2d>, With<bevy_lunex::UiSourceCamera<0>>)>) {
+    if let Ok(mut camera_transform) = ui_cameras.single_mut() {
+        // Reset to the proper UI camera position
+        *camera_transform = Transform::from_translation(Vec3::new(0.0, 0.0, 1000.0));
+        info!("UI camera reset to proper position");
+    }
+}
 
 fn spawn(mut commands: Commands, ui_assets: Res<UiAssets>, font_assets: Res<FontAssets>) {
     // Create UI
