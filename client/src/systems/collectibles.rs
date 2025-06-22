@@ -5,8 +5,8 @@ use bevy_yarnspinner::prelude::*;
 use bevy_yarnspinner::events::ExecuteCommandEvent;
 use std::sync::Arc;
 
-use crate::systems::character_controller::CharacterController;
 use crate::systems::dojo::PickupItemEvent;
+use crate::{systems::character_controller::CharacterController, ui::inventory};
 use crate::screens::Screen;
 
 // ===== COMPONENTS & RESOURCES =====
@@ -35,11 +35,16 @@ pub struct FloatingItem {
     pub hover_speed: f32,
 }
 
-#[derive(Component, Clone, Copy, Debug)]
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
 pub enum CollectibleType {
     Book,
     FirstAidKit,
 }
+
+
+#[derive(Resource)]
+pub struct NextItemToAdd(pub CollectibleType);
+
 
 #[derive(Component)]
 pub struct Sensor;
@@ -99,6 +104,7 @@ impl Plugin for CollectiblesPlugin {
         .add_event::<StartBookDialogueEvent>()
         .init_resource::<NearbyInteractable>()
         .init_resource::<CurrentBookEntity>()
+        .insert_resource(inventory::InventoryVisibilityState::default())
         .add_systems(
             Update,
             (
@@ -111,6 +117,8 @@ impl Plugin for CollectiblesPlugin {
                 handle_dialogue_commands,
                 debug_dialogue_system,
                 update_interaction_prompts,
+                inventory::add_item_to_inventory.run_if(in_state(Screen::GamePlay)),
+                inventory::toggle_inventory_visibility.run_if(in_state(Screen::GamePlay)),
             )
                 .run_if(in_state(Screen::GamePlay)),
         );
@@ -182,6 +190,7 @@ fn collect_items(
         if distance < 5.0 {
             // Collection radius - only for non-interactable items (like FirstAidKit)
             info!("Collected a {:?}!", collectible_type);
+            commands.insert_resource(NextItemToAdd(*collectible_type));
 
             match collectible_type {
                 CollectibleType::FirstAidKit => {
@@ -209,6 +218,7 @@ fn collect_items(
         }
     }
 }
+
 
 fn update_floating_items(time: Res<Time>, mut query: Query<(&FloatingItem, &mut Transform)>) {
     for (floating, mut transform) in query.iter_mut() {

@@ -43,6 +43,12 @@ pub struct UiAssets {
 
     #[asset(path = "images/ui/components/chevron_right.png")]
     pub chevron_right: Handle<Image>,
+
+    #[asset(path = "images/collectibles/first_aid_kit.png")]
+    pub first_aid_kit: Handle<Image>,
+
+    #[asset(path = "images/collectibles/book.png")]
+    pub book: Handle<Image>,
 }
 
 // Audio Assets

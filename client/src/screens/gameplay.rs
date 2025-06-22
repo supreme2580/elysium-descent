@@ -11,6 +11,7 @@ use crate::keybinding;
 use bevy_enhanced_input::prelude::*;
 use crate::systems::collectibles::{CollectiblesPlugin, spawn_collectible, spawn_interactable_book, CollectibleType};
 use crate::systems::collectibles_config::COLLECTIBLES;
+use crate::ui::inventory::spawn_inventory_ui;
 
 // ===== PLUGIN SETUP =====
 
@@ -56,7 +57,7 @@ fn camera_follow_player(
     }
 }
 
-#[derive(Component, Clone)]
+#[derive(Component, Default, Clone)]
 struct PlayingScene;
 
 #[derive(Component)]
@@ -160,5 +161,7 @@ impl PlayingScene {
             Transform::from_xyz(0.0, 4.0, -12.0).looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
             PlayingScene, // Add scene marker to ensure cleanup
         ));
+
+        spawn_inventory_ui::<PlayingScene>(commands);
     }
 }
