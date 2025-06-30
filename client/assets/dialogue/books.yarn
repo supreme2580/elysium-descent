@@ -110,3 +110,11 @@ With this deeper comprehension, you feel ready to continue your descent.
     You feel you've learned enough by studying it here.
     <<jump BookLeft>>
 ===
+
+title: InteractionPrompt
+tags: 
+colorID: 4
+position: 0,0
+---
+Press E to read
+===

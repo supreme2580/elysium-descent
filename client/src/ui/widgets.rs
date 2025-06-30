@@ -3,7 +3,7 @@ use bevy::ecs::system::IntoObserverSystem;
 use bevy::ecs::relationship::{RelatedSpawnerCommands, Relationship};
 use crate::ui::styles::ElysiumDescentColorPalette;
 
-fn label_widget(window_height: f32, font: Handle<Font>, text: impl Into<String> + Clone) -> impl Bundle {
+pub fn label_widget(window_height: f32, font: Handle<Font>, text: impl Into<String> + Clone) -> impl Bundle {
     (
         Node {
             width: Val::Percent(50.0),

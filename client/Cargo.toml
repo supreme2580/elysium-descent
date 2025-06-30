@@ -19,8 +19,6 @@ bevy_enhanced_input = "0.12.0"
 bevy_gltf_animation = "0.2.0"
 bevy_kira_audio = "0.23.0"
 bevy_lunex = "0.4.1"
-bevy_yarnspinner = "0.5.0"
-bevy_yarnspinner_example_dialogue_view = "0.5.0"
 dojo_bevy_plugin = { git = "https://github.com/okhaimie-dev/dojo.bevy.git", branch = "main" }
 log = { version = "0.4", features = [
     "max_level_debug",

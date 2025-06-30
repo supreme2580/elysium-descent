@@ -12,18 +12,21 @@ use bevy_enhanced_input::prelude::*;
 use crate::systems::collectibles::{CollectiblesPlugin, spawn_collectible, spawn_interactable_book, CollectibleType};
 use crate::systems::collectibles_config::COLLECTIBLES;
 use crate::ui::inventory::spawn_inventory_ui;
+use crate::ui::dialog::{DialogPlugin, spawn_dialog, create_book_dialog};
+use crate::assets::FontAssets;
 
 // ===== PLUGIN SETUP =====
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(Screen::GamePlay), (PlayingScene::spawn_environment, set_gameplay_clear_color))
+    app.add_systems(OnEnter(Screen::GamePlay), (PlayingScene::spawn_environment, set_gameplay_clear_color, spawn_book_dialog))
         .add_systems(Update, camera_follow_player.run_if(in_state(Screen::GamePlay)))
         .add_systems(OnExit(Screen::GamePlay), despawn_scene::<PlayingScene>)
         .add_plugins(PhysicsPlugins::default())
         // .add_plugins(PhysicsDebugPlugin::default())
         .add_plugins(CharacterControllerPlugin)
         .add_plugins(GltfAnimationPlugin)
-        .add_plugins(CollectiblesPlugin);
+        .add_plugins(CollectiblesPlugin)
+        .add_plugins(DialogPlugin);
 }
 
 // ===== SYSTEMS =====
@@ -62,6 +65,15 @@ struct PlayingScene;
 
 #[derive(Component)]
 struct EnvironmentMarker;
+
+fn spawn_book_dialog(
+    commands: Commands,
+    font_assets: Res<FontAssets>,
+    windows: Query<&Window>,
+) {
+    let dialog_config = create_book_dialog();
+    spawn_dialog(commands, font_assets, windows, dialog_config, PlayingScene);
+}
 
 // ===== PLAYING SCENE IMPLEMENTATION =====
 
