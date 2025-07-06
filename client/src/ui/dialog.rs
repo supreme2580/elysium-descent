@@ -122,7 +122,7 @@ pub fn check_dialog_proximity(
     };
 
     let mut near_target = false;
-    let hide_distance = 10.0; // Default distance for book proximity
+    let hide_distance = 5.0; // Reduced distance for book proximity
 
     // Check if player is near any target
     for (_, target_transform, _interactable) in target_query.iter() {
@@ -151,7 +151,7 @@ pub fn create_book_dialog() -> DialogConfig {
     DialogConfig {
         text: "Press E to enter".to_string(),
         width: 40.0,
-        height: 8.0,
+        height: 14.0,
         position: DialogPosition::BottomCenter { bottom_margin: 4.0 },
         background_color: Color::srgba(0.1, 0.1, 0.2, 0.6),
         border_color: Color::srgba(0.2, 0.2, 0.3, 0.8),

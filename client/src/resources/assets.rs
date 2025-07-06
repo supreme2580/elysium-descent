@@ -49,6 +49,12 @@ pub struct UiAssets {
 
     #[asset(path = "images/collectibles/book.png")]
     pub book: Handle<Image>,
+
+    #[asset(path = "avatars/player.jpeg")]
+    pub player_avatar: Handle<Image>,
+
+    #[asset(path = "avatars/enemy.jpeg")]
+    pub enemy_avatar: Handle<Image>,
 }
 
 // Audio Assets
@@ -86,8 +92,8 @@ pub struct ModelAssets {
     #[asset(path = "models/environment.glb#Scene0")]
     pub environment: Handle<Scene>,
 
-    #[asset(path = "models/floor.glb#Scene0")]
-    pub floor: Handle<Scene>,
+    #[asset(path = "models/dungeon.glb#Scene0")]
+    pub dungeon: Handle<Scene>,
 
     #[asset(path = "models/enemy.glb#Scene0")]
     pub enemy: Handle<Scene>,

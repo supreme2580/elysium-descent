@@ -37,7 +37,7 @@ impl Default for InventoryVisibilityState {
     }
 }
 
-pub fn spawn_inventory_ui<T: Component + Default>(mut commands: Commands) {
+pub fn spawn_inventory_ui<T: Component + Default>(commands: &mut Commands) {
     commands.spawn((
         Node {
             width: Val::Percent(50.0),

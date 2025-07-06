@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use bevy_gltf_animation::prelude::*;
 
 use super::{Screen, despawn_scene};
-use crate::assets::ModelAssets;
+use crate::assets::{ModelAssets, FontAssets, UiAssets};
 use crate::systems::character_controller::{
     CharacterController, CharacterControllerBundle, CharacterControllerPlugin, setup_idle_animation,
 };
@@ -13,7 +13,7 @@ use crate::systems::collectibles::{CollectiblesPlugin, spawn_collectible, spawn_
 use crate::systems::collectibles_config::COLLECTIBLES;
 use crate::ui::inventory::spawn_inventory_ui;
 use crate::ui::dialog::{DialogPlugin, spawn_dialog, create_book_dialog};
-use crate::assets::FontAssets;
+use crate::ui::widgets::{player_hud_widget, HudPosition};
 
 // ===== PLUGIN SETUP =====
 
@@ -71,14 +71,36 @@ fn spawn_book_dialog(
     font_assets: Res<FontAssets>,
     windows: Query<&Window>,
 ) {
-    let dialog_config = create_book_dialog();
+    let mut dialog_config = create_book_dialog();
+    dialog_config.height = 14.0; // Custom height for this usage
     spawn_dialog(commands, font_assets, windows, dialog_config, PlayingScene);
+}
+
+fn spawn_player_hud(
+    commands: &mut Commands,
+    font_assets: &Res<FontAssets>,
+    ui_assets: &Res<UiAssets>,
+) {
+    // Example values, replace with actual player data
+    let avatar = ui_assets.player_avatar.clone();
+    let name = "0XJEHU";
+    let level = 2;
+    let health = (105, 115);
+    let xp = (80, 100);
+    let font = font_assets.rajdhani_bold.clone();
+
+    commands.spawn(player_hud_widget(avatar, name, level, health, xp, font, HudPosition::Left));
 }
 
 // ===== PLAYING SCENE IMPLEMENTATION =====
 
 impl PlayingScene {
-    fn spawn_environment(mut commands: Commands, assets: Res<ModelAssets>) {
+    fn spawn_environment(
+        mut commands: Commands,
+        assets: Res<ModelAssets>,
+        font_assets: Res<FontAssets>,
+        ui_assets: Res<UiAssets>,
+    ) {
         // Set up ambient light
         commands.insert_resource(AmbientLight {
             color: Color::srgb_u8(68, 71, 88),
@@ -174,6 +196,7 @@ impl PlayingScene {
             PlayingScene, // Add scene marker to ensure cleanup
         ));
 
-        spawn_inventory_ui::<PlayingScene>(commands);
+        spawn_inventory_ui::<PlayingScene>(&mut commands);
+        spawn_player_hud(&mut commands, &font_assets, &ui_assets);
     }
 }
