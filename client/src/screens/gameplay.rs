@@ -20,7 +20,7 @@ use crate::ui::widgets::{player_hud_widget, HudPosition};
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(Screen::GamePlay), (PlayingScene::spawn_environment, set_gameplay_clear_color, spawn_book_dialog))
         .add_systems(Update, camera_follow_player.run_if(in_state(Screen::GamePlay)))
-        .add_systems(OnExit(Screen::GamePlay), despawn_scene::<PlayingScene>)
+        .add_systems(OnExit(Screen::GamePlay), (despawn_scene::<PlayingScene>, despawn_gameplay_hud))
         .add_plugins(PhysicsPlugins::default())
         // .add_plugins(PhysicsDebugPlugin::default())
         .add_plugins(CharacterControllerPlugin)
@@ -66,6 +66,9 @@ struct PlayingScene;
 #[derive(Component)]
 struct EnvironmentMarker;
 
+#[derive(Component)]
+struct GameplayHud;
+
 fn spawn_book_dialog(
     commands: Commands,
     font_assets: Res<FontAssets>,
@@ -89,7 +92,13 @@ fn spawn_player_hud(
     let xp = (80, 100);
     let font = font_assets.rajdhani_bold.clone();
 
-    commands.spawn(player_hud_widget(avatar, name, level, health, xp, font, HudPosition::Left));
+    commands.spawn((player_hud_widget(avatar, name, level, health, xp, font, HudPosition::Left), GameplayHud));
+}
+
+fn despawn_gameplay_hud(mut commands: Commands, query: Query<Entity, With<GameplayHud>>) {
+    for entity in &query {
+        commands.entity(entity).despawn();
+    }
 }
 
 // ===== PLAYING SCENE IMPLEMENTATION =====

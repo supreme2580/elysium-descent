@@ -50,10 +50,10 @@ pub struct UiAssets {
     #[asset(path = "images/collectibles/book.png")]
     pub book: Handle<Image>,
 
-    #[asset(path = "avatars/player.jpeg")]
+    #[asset(path = "avatars/player.png")]
     pub player_avatar: Handle<Image>,
 
-    #[asset(path = "avatars/enemy.jpeg")]
+    #[asset(path = "avatars/enemy.png")]
     pub enemy_avatar: Handle<Image>,
 }
 

@@ -27,6 +27,8 @@ impl Plugin for CharacterControllerPlugin {
 pub enum MovementAction {
     Move(Vector2),
     Jump,
+    FightMove1,
+    FightMove2,
 }
 
 /// A marker component indicating that an entity is using a character controller.
@@ -169,13 +171,13 @@ fn movement(
         &mut LinearVelocity,
         &mut Transform,
         Has<Grounded>,
-        &AnimationState,
+        &mut AnimationState,
     )>,
 ) {
     let delta_time = time.delta_secs();
 
     for event in movement_event_reader.read() {
-        for (jump_impulse, mut linear_velocity, mut transform, is_grounded, animation_state) in
+        for (jump_impulse, mut linear_velocity, mut transform, is_grounded, mut animation_state) in
             &mut controllers
         {
             match event {
@@ -224,6 +226,14 @@ fn movement(
                         linear_velocity.y = jump_impulse.0;
                     }
                 }
+                MovementAction::FightMove1 => {
+                    // Trigger fight move 1 animation
+                    animation_state.fight_move_1 = true;
+                }
+                MovementAction::FightMove2 => {
+                    // Trigger fight move 2 animation
+                    animation_state.fight_move_2 = true;
+                }
             }
         }
     }
@@ -264,6 +274,8 @@ fn apply_movement_damping(
 pub struct AnimationState {
     pub forward_hold_time: f32,
     pub current_animation: usize,
+    pub fight_move_1: bool,
+    pub fight_move_2: bool,
 }
 
 /// Updates animations based on character movement
@@ -275,22 +287,59 @@ fn update_animations(
         let horizontal_velocity = Vec2::new(velocity.x, velocity.z);
         let is_moving = horizontal_velocity.length() > 0.1;
 
-        // Determine which animation should be playing
-        let target_animation = if !is_moving {
-            2 // Idle
-        } else if animation_state.forward_hold_time >= 3.0 {
-            3 // Special animation after 3 seconds
+        // Check if fight moves are active
+        if animation_state.fight_move_1 {
+            // Play fight move 1 animation (index 5)
+            if animation_state.current_animation != 5 {
+                if let Some(animation) = animations.get_by_number(5) {
+                    if let Ok(mut player) = animation_players.get_mut(animations.animation_player) {
+                        player.stop_all();
+                        player.play(animation);
+                        animation_state.current_animation = 5;
+                    }
+                }
+            }
+            // Check if animation has finished
+            if let Ok(player) = animation_players.get(animations.animation_player) {
+                if player.all_finished() {
+                    animation_state.fight_move_1 = false;
+                }
+            }
+        } else if animation_state.fight_move_2 {
+            // Play fight move 2 animation (index 6)
+            if animation_state.current_animation != 6 {
+                if let Some(animation) = animations.get_by_number(6) {
+                    if let Ok(mut player) = animation_players.get_mut(animations.animation_player) {
+                        player.stop_all();
+                        player.play(animation);
+                        animation_state.current_animation = 6;
+                    }
+                }
+            }
+            // Check if animation has finished
+            if let Ok(player) = animation_players.get(animations.animation_player) {
+                if player.all_finished() {
+                    animation_state.fight_move_2 = false;
+                }
+            }
         } else {
-            4 // Regular running
-        };
+            // Normal movement animations
+            let target_animation = if !is_moving {
+                3 // Idle
+            } else if animation_state.forward_hold_time >= 3.0 {
+                4 // Running
+            } else {
+                7 // Regular walking
+            };
 
-        // Only change animation if we need to
-        if target_animation != animation_state.current_animation {
-            if let Some(animation) = animations.get_by_number(target_animation) {
-                if let Ok(mut player) = animation_players.get_mut(animations.animation_player) {
-                    player.stop_all();
-                    player.play(animation).repeat();
-                    animation_state.current_animation = target_animation;
+            // Only change animation if we need to
+            if target_animation != animation_state.current_animation {
+                if let Some(animation) = animations.get_by_number(target_animation) {
+                    if let Ok(mut player) = animation_players.get_mut(animations.animation_player) {
+                        player.stop_all();
+                        player.play(animation).repeat();
+                        animation_state.current_animation = target_animation;
+                    }
                 }
             }
         }
@@ -343,6 +392,8 @@ impl CharacterControllerBundle {
             animation_state: AnimationState {
                 forward_hold_time: 0.0,
                 current_animation: 2, // Start with idle animation
+                fight_move_1: false,
+                fight_move_2: false,
             },
             stair_climbing_state: StairClimbingState {},
         }

@@ -20,7 +20,8 @@ pub fn plugin(app: &mut App) {
         .add_observer(sprint_started)
         .add_observer(sprint_completed)
         .add_observer(handle_create_game)
-        .add_observer(handle_interact);
+        .add_observer(handle_interact)
+        .add_observer(handle_fight_move);
 }
 
 fn spawn_system_action(mut commands: Commands) {
@@ -52,6 +53,11 @@ fn player_binding(trigger: Trigger<Binding<Player>>, mut players: Query<&mut Act
         actions
             .bind::<Interact>()
             .to(KeyCode::KeyE);
+        
+        // Fight Move (X key, with or without shift)
+        actions
+            .bind::<FightMove>()
+            .to(KeyCode::KeyX);
     } else {
         error!(
             "Failed to get player actions for entity {:?}",
@@ -155,6 +161,10 @@ pub struct Sprint;
 #[input_action(output = bool)]
 pub struct Interact;
 
+#[derive(Debug, InputAction)]
+#[input_action(output = bool)]
+pub struct FightMove;
+
 /// Input context for the Elysium game
 #[derive(InputContext)]
 pub struct SystemInput;
@@ -227,5 +237,20 @@ fn handle_interact(
     if trigger.value {
         info!("Interact key pressed - triggering interaction");
         interaction_events.write(crate::systems::collectibles::InteractionEvent);
+    }
+}
+
+fn handle_fight_move(
+    trigger: Trigger<Started<FightMove>>,
+    mut movement_events: EventWriter<crate::systems::character_controller::MovementAction>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+) {
+    if trigger.value {
+        let shift_pressed = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+        if shift_pressed {
+            movement_events.write(crate::systems::character_controller::MovementAction::FightMove2);
+        } else {
+            movement_events.write(crate::systems::character_controller::MovementAction::FightMove1);
+        }
     }
 }
