@@ -195,7 +195,11 @@ fn movement(
                     let movement_direction = (forward * -direction.y) + (right * direction.x);
 
                     // Calculate target velocity
-                    let target_speed = CharacterMovementConfig::MAX_SPEED * direction.length();
+                    let target_speed = if animation_state.forward_hold_time >= 3.0 {
+                        CharacterMovementConfig::MAX_RUN_SPEED * direction.length()
+                    } else {
+                        CharacterMovementConfig::MAX_SPEED * direction.length()
+                    };
                     let current_speed = Vec2::new(linear_velocity.x, linear_velocity.z).length();
 
                     // Smooth acceleration/deceleration

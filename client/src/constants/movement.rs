@@ -11,6 +11,7 @@ impl CharacterMovementConfig {
     pub const MOVEMENT_ACCELERATION: f32 = 30.0;
     pub const MOVEMENT_DECELERATION: f32 = 40.0;
     pub const MAX_SPEED: f32 = 5.0;
+    pub const MAX_RUN_SPEED: f32 = 13.5; // Maximum speed when running/sprinting
     pub const ROTATION_SPEED: f32 = 5.0;
 
     // Air and ground friction constants
