@@ -1,7 +1,7 @@
 {
   "world": {
-    "class_hash": "0x7746f30d2b8494780387ed469797ecb5c62c7b6f49f4939a5e60e0f7ae5f99e",
-    "address": "0x4cde54171020bfc55d30fbfe6eae6d3fc169201367fb323f0021f1dd1971e6e",
+    "class_hash": "0x685ed02eefa98fe7e208aa295042e9bbad8029b0d3d6f0ba2b32546efe0a1f9",
+    "address": "0x2f3fd3e14a14bb1c98095c6f9c305b5660e41f6bbbf8f8dc8a52c6104fe5fa",
     "seed": "elysium_001",
     "name": "Dojo starter",
     "entrypoints": [
@@ -1328,7 +1328,7 @@
   },
   "contracts": [
     {
-      "address": "0x6456eb5e3f5e06bcd2ae9ef0b21751bed03811333b299c451535245ce37e039",
+      "address": "0x714c627d3dd04f47d301b29f2db8e3dd0587055e32b366ce13182f7c7e031a7",
       "class_hash": "0x5d98e4813136fb743de87bc7b7351fa37fcf4393f8a02755b96b16d9365c538",
       "abi": [
         {

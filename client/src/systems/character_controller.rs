@@ -1,6 +1,6 @@
 use crate::constants::movement::CharacterMovementConfig;
 use avian3d::{math::*, prelude::*};
-use bevy::{ecs::query::Has, prelude::*};
+use bevy::prelude::*;
 use bevy_gltf_animation::prelude::*;
 
 pub struct CharacterControllerPlugin;
@@ -8,11 +8,11 @@ pub struct CharacterControllerPlugin;
 impl Plugin for CharacterControllerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<LastInputDirection>()
+            .init_resource::<JumpCooldown>()
             .add_event::<MovementAction>()
             .add_systems(
                 Update,
                 (
-                    update_grounded,
                     movement,
                     apply_movement_damping,
                     update_animations,
@@ -35,10 +35,7 @@ pub enum MovementAction {
 #[derive(Component)]
 pub struct CharacterController;
 
-/// A marker component indicating that an entity is on the ground.
-#[derive(Component)]
-#[component(storage = "SparseSet")]
-pub struct Grounded;
+
 
 /// Component to track stair climbing state for smoother transitions
 #[derive(Component)]
@@ -89,78 +86,22 @@ impl Default for MovementBundle {
 #[derive(Resource, Default, Debug, Clone, Copy)]
 pub struct LastInputDirection(pub Vec2);
 
+/// Add a resource to track jump cooldown
+#[derive(Resource, Debug)]
+pub struct JumpCooldown {
+    pub last_jump_time: f32,
+    pub cooldown_duration: f32,
+}
 
-/// Updates the [`Grounded`] status and handles ground snapping
-fn update_grounded(
-    mut commands: Commands,
-    mut query: Query<(Entity, &Transform, &mut LinearVelocity), With<CharacterController>>,
-    time: Res<Time>,
-    mut ray_cast: MeshRayCast,
-) {
-    for (entity, transform, mut velocity) in &mut query {
-        // Cast ray downward to detect ground
-        let ray_origin = transform.translation;
-        let ray_direction = Dir3::NEG_Y;
-        let ray = Ray3d::new(ray_origin, ray_direction);
-
-        // Create settings for ground detection
-        let settings = MeshRayCastSettings::default()
-            .with_visibility(RayCastVisibility::Any) // Cast against all meshes
-            .with_early_exit_test(&|_| true); // Stop at first hit
-
-        // Perform the ground check
-        if let Some((_, hit)) = ray_cast.cast_ray(ray, &settings).first() {
-            let ground_normal = hit.normal;
-            let slope_angle = ground_normal.angle_between(Vec3::Y).to_degrees();
-
-            // Check if we're on a valid slope
-            if slope_angle <= CharacterMovementConfig::MAX_SLOPE_ANGLE {
-                // Ground snapping for small obstacles
-                let distance_to_ground = hit.distance;
-                if distance_to_ground <= CharacterMovementConfig::GROUND_SNAP_DISTANCE {
-                    // Snap to ground
-                    velocity.y = 0.0;
-                    commands.entity(entity).insert(Grounded);
-
-                    // Handle stair climbing with improved logic
-                    if distance_to_ground > CharacterMovementConfig::GROUND_SNAP_DISTANCE 
-                        && distance_to_ground <= CharacterMovementConfig::MAX_STAIR_HEIGHT {
-                        
-                        // Only try to climb stairs if character is moving forward
-                        let horizontal_velocity = Vec2::new(velocity.x, velocity.z);
-                        if horizontal_velocity.length() > 0.1 {
-                            // Try to climb the stair with multiple detection points
-                            let forward = transform.forward();
-                            let stair_origin = ray_origin + forward * CharacterMovementConfig::STAIR_DETECTION_DISTANCE;
-                            let stair_ray = Ray3d::new(stair_origin, ray_direction);
-
-                            // Perform the stair check
-                            if let Some((_, stair_hit)) = ray_cast.cast_ray(stair_ray, &settings).first() {
-                                let step_height = distance_to_ground - stair_hit.distance;
-                                
-                                // Only climb if the step height is reasonable
-                                if step_height > 0.05 && step_height <= CharacterMovementConfig::MAX_STAIR_HEIGHT {
-                                    // Use physics-based calculation for smoother stair climbing
-                                    velocity.y = (step_height / time.delta_secs()) * 1.2; // Reduced multiplier for less aggressive jumping
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    commands.entity(entity).remove::<Grounded>();
-                }
-            } else {
-                // Too steep, slide down
-                let slide_direction = (ground_normal - Vec3::Y * ground_normal.y).normalize();
-                velocity.x += slide_direction.x * 9.8 * time.delta_secs();
-                velocity.z += slide_direction.z * 9.8 * time.delta_secs();
-                commands.entity(entity).remove::<Grounded>();
-            }
-        } else {
-            commands.entity(entity).remove::<Grounded>();
+impl Default for JumpCooldown {
+    fn default() -> Self {
+        Self {
+            last_jump_time: 0.0,
+            cooldown_duration: 1.5, // 1.5 second cooldown
         }
     }
 }
+
 
 /// Responds to [`MovementAction`] events and moves character controllers accordingly
 fn movement(
@@ -170,14 +111,15 @@ fn movement(
         &JumpImpulse,
         &mut LinearVelocity,
         &mut Transform,
-        Has<Grounded>,
         &mut AnimationState,
     )>,
+    mut jump_cooldown: ResMut<JumpCooldown>,
 ) {
     let delta_time = time.delta_secs();
+    jump_cooldown.last_jump_time += delta_time;
 
     for event in movement_event_reader.read() {
-        for (jump_impulse, mut linear_velocity, mut transform, is_grounded, mut animation_state) in
+        for (jump_impulse, mut linear_velocity, mut transform, mut animation_state) in
             &mut controllers
         {
             match event {
@@ -209,25 +151,30 @@ fn movement(
                         CharacterMovementConfig::MOVEMENT_DECELERATION
                     };
 
-                    // Apply movement
-                    let speed_multiplier = if animation_state.current_animation == 3 {
-                        1.5
+                    // Apply movement with stability for running
+                    let target_velocity = movement_direction * target_speed;
+                    
+                    // Use more stable interpolation for running
+                    let interpolation_factor = if animation_state.forward_hold_time >= 3.0 {
+                        // More stable interpolation for running
+                        (acceleration * delta_time).min(0.8)
                     } else {
-                        1.0
+                        // Normal interpolation for walking
+                        acceleration * delta_time
                     };
-                    let target_velocity = movement_direction * target_speed * speed_multiplier;
 
                     // Smoothly interpolate current velocity to target velocity
                     linear_velocity.x = linear_velocity
                         .x
-                        .lerp(target_velocity.x, acceleration * delta_time);
+                        .lerp(target_velocity.x, interpolation_factor);
                     linear_velocity.z = linear_velocity
                         .z
-                        .lerp(target_velocity.z, acceleration * delta_time);
+                        .lerp(target_velocity.z, interpolation_factor);
                 }
                 MovementAction::Jump => {
-                    if is_grounded {
+                    if jump_cooldown.last_jump_time >= jump_cooldown.cooldown_duration {
                         linear_velocity.y = jump_impulse.0;
+                        jump_cooldown.last_jump_time = 0.0;
                     }
                 }
                 MovementAction::FightMove1 => {
@@ -243,25 +190,37 @@ fn movement(
     }
 }
 
-/// Applies movement damping and ground sticking
+/// Applies movement damping and prevents unwanted climbing
 fn apply_movement_damping(
-    mut query: Query<(
-        &mut LinearVelocity,
-        Option<&Grounded>,
-    ), With<CharacterController>>,
+    mut query: Query<(&mut LinearVelocity, &AnimationState, &Transform), With<CharacterController>>,
 ) {
-    for (mut linear_velocity, grounded) in &mut query {
-        // Apply air resistance when not grounded
-        if grounded.is_none() {
-            linear_velocity.x *= CharacterMovementConfig::AIR_RESISTANCE;
-            linear_velocity.z *= CharacterMovementConfig::AIR_RESISTANCE;
+    for (mut linear_velocity, animation_state, _transform) in &mut query {
+        // Check for unwanted climbing behavior
+        let horizontal_speed = Vec2::new(linear_velocity.x, linear_velocity.z).length();
+        let is_moving_horizontally = horizontal_speed > 0.1;
+        let is_rising_gradually = linear_velocity.y > 0.1 && linear_velocity.y < 2.0;
+        
+        // If moving horizontally and rising gradually, this is likely unwanted climbing
+        if is_moving_horizontally && is_rising_gradually {
+            // Reduce the climbing effect
+            linear_velocity.y *= 0.1;
+            // Also reduce horizontal movement slightly to prevent getting stuck
+            linear_velocity.x *= 0.8;
+            linear_velocity.z *= 0.8;
         }
+        
+        // Apply different damping based on movement state
+        let damping_factor = if animation_state.forward_hold_time >= 3.0 {
+            // More stable damping for running
+            CharacterMovementConfig::AIR_RESISTANCE * 0.95
+        } else {
+            // Normal damping for walking
+            CharacterMovementConfig::AIR_RESISTANCE
+        };
 
-        // Apply ground friction
-        if grounded.is_some() {
-            linear_velocity.x *= CharacterMovementConfig::GROUND_FRICTION;
-            linear_velocity.z *= CharacterMovementConfig::GROUND_FRICTION;
-        }
+        // Apply air resistance
+        linear_velocity.x *= damping_factor;
+        linear_velocity.z *= damping_factor;
 
         // Prevent tiny residual movement
         if linear_velocity.x.abs() < CharacterMovementConfig::MIN_MOVEMENT_THRESHOLD {
@@ -370,15 +329,15 @@ pub fn setup_idle_animation(
 
 impl CharacterControllerBundle {
     pub fn new() -> Self {
-        // Improved collider for better stair climbing
-        let length = 0.6;  // Reduced height for better step clearance
-        let radius = 0.25; // Slightly smaller radius
+        // Improved collider for better collision handling
+        let length = 0.5;  // Reduced height to prevent climbing
+        let radius = 0.2; // Smaller radius for more precise collision
         let offset = Vec3::new(0.0, (length / 2.0) + radius, 0.0);
         let capsule = Collider::capsule(radius, length);
         let collider = Collider::compound(vec![(offset, Quat::IDENTITY, capsule)]);
         
         // Smaller ground caster for more precise ground detection
-        let caster_shape = Collider::sphere(0.3);
+        let caster_shape = Collider::sphere(0.2);
 
         Self {
             character_controller: CharacterController,
@@ -390,7 +349,7 @@ impl CharacterControllerBundle {
                 Quaternion::default(),
                 Dir3::NEG_Y,
             )
-            .with_max_distance(CharacterMovementConfig::GROUND_SNAP_DISTANCE + 0.1), // Adjusted detection distance
+            .with_max_distance(CharacterMovementConfig::GROUND_SNAP_DISTANCE + 0.1),
             locked_axes: LockedAxes::ROTATION_LOCKED,
             movement: MovementBundle::new(CharacterMovementConfig::MOVEMENT_ACCELERATION, 0.9, 7.0),
             animation_state: AnimationState {

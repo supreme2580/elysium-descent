@@ -19,13 +19,13 @@ bevy_enhanced_input = "0.12.0"
 bevy_gltf_animation = "0.2.0"
 bevy_kira_audio = "0.23.0"
 bevy_lunex = "0.4.1"
-dojo_bevy_plugin = { git = "https://github.com/okhaimie-dev/dojo.bevy.git", branch = "main" }
+dojo_bevy_plugin = { git = "https://github.com/okhaimie-dev/dojo.bevy.git", rev = "6e2763d" }
 log = { version = "0.4", features = [
     "max_level_debug",
     "release_max_level_warn",
 ] }
 once_cell = "1.21.3"
-starknet = "0.13"
+starknet = "0.16.0"
 tracing = { version = "0.1", features = [
     "max_level_debug",
     "release_max_level_warn",

@@ -182,7 +182,6 @@ impl PlayingScene {
                         &assets,
                         config.position,
                         config.scale,
-                        config.on_collect.clone(),
                         PlayingScene,
                     );
                 }

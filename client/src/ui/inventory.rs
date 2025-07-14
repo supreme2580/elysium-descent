@@ -178,17 +178,19 @@ pub fn add_item_to_inventory(
                     // spawn the image
                     item_parent.spawn((
                         Node {
-                            width: Val::Percent(100.0),
-                            height: Val::Percent(100.0),
+                            width: Val::Percent(120.0),
+                            height: Val::Percent(120.0),
                             position_type: PositionType::Absolute,
                             align_content: AlignContent::Center,
                             justify_content: JustifyContent::Center,
                             align_items: AlignItems::Center,
+                            top: Val::Percent(-10.0),
+                            left: Val::Percent(-10.0),
                             ..default()
                         },
                         ImageNode {
                             image: match collectible_type.0 {
-                                CollectibleType::FirstAidKit => ui_assets.first_aid_kit.clone(),
+                                CollectibleType::Coin => ui_assets.coin.clone(),
                                 CollectibleType::Book => ui_assets.book.clone(),
                             },
                             ..default()
@@ -200,22 +202,22 @@ pub fn add_item_to_inventory(
                     item_parent.spawn((
                         Node {
                             position_type: PositionType::Absolute,
-                            width: Val::Percent(30.0),
-                            height: Val::Percent(30.0),
-                            left: Val::Percent(2.0),
-                            top: Val::Percent(2.0),
+                            width: Val::Percent(25.0),
+                            height: Val::Percent(25.0),
+                            left: Val::Percent(7.5),
+                            top: Val::Percent(10.0),
                             align_items: AlignItems::Center,
                             justify_content: JustifyContent::Center,
                             ..default()
                         },
                         BorderRadius::MAX,
-                        BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.8)),
+                        BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.9)),
                         ZIndex(2),
                     )).with_children(|text_parent| {
                         text_parent.spawn((
                             TextFont {
-                                font_size: 32.0,
-                                font: font_assets.rajdhani_bold.clone(),
+                                font_size: 20.0,
+                                font: font_assets.rajdhani_extra_bold.clone(),
                                 ..default()
                             },
                             Text::new("1"),

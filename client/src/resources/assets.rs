@@ -44,11 +44,11 @@ pub struct UiAssets {
     #[asset(path = "images/ui/components/chevron_right.png")]
     pub chevron_right: Handle<Image>,
 
-    #[asset(path = "images/collectibles/first_aid_kit.png")]
-    pub first_aid_kit: Handle<Image>,
-
     #[asset(path = "images/collectibles/book.png")]
     pub book: Handle<Image>,
+
+    #[asset(path = "images/collectibles/coin.png")]
+    pub coin: Handle<Image>,
 
     #[asset(path = "avatars/player.png")]
     pub player_avatar: Handle<Image>,
@@ -75,6 +75,9 @@ pub struct FontAssets {
 
     #[asset(path = "fonts/GoudyTrajan-Regular.otf")]
     pub rajdhani_medium: Handle<Font>,
+
+    #[asset(path = "fonts/rajdhani/Rajdhani-Bold.ttf")]
+    pub rajdhani_extra_bold: Handle<Font>,
 }
 
 // Model Assets (for future use)
@@ -83,8 +86,8 @@ pub struct ModelAssets {
     #[asset(path = "models/book.glb#Scene0")]
     pub book: Handle<Scene>,
 
-    #[asset(path = "models/first-aid-kit.glb#Scene0")]
-    pub first_aid_kit: Handle<Scene>,
+    #[asset(path = "models/coin.glb#Scene0")]
+    pub coin: Handle<Scene>,
 
     #[asset(path = "models/player.glb")]
     pub player: Handle<Gltf>,
