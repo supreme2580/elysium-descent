@@ -109,11 +109,9 @@ pub fn check_dialog_proximity(
             Entity,
             &Transform,
             &crate::systems::collectibles::Interactable,
+            &crate::systems::collectibles::CollectibleType,
         ),
-        (
-            With<crate::systems::collectibles::CollectibleType>,
-            Without<crate::systems::character_controller::CharacterController>,
-        ),
+        (Without<crate::systems::character_controller::CharacterController>,),
     >,
     mut dialog_query: Query<&mut Visibility, With<Dialog>>,
 ) {
@@ -124,14 +122,16 @@ pub fn check_dialog_proximity(
     let mut near_target = false;
     let hide_distance = 5.0; // Reduced distance for book proximity
 
-    // Check if player is near any target
-    for (_, target_transform, _interactable) in target_query.iter() {
-        let distance = player_transform
-            .translation
-            .distance(target_transform.translation);
-        if distance <= hide_distance {
-            near_target = true;
-            break;
+    // Check if player is near any Book
+    for (_, target_transform, _interactable, collectible_type) in target_query.iter() {
+        if *collectible_type == crate::systems::collectibles::CollectibleType::Book {
+            let distance = player_transform
+                .translation
+                .distance(target_transform.translation);
+            if distance <= hide_distance {
+                near_target = true;
+                break;
+            }
         }
     }
 

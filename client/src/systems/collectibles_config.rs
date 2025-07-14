@@ -13,6 +13,7 @@ pub static COLLECTIBLES: Lazy<Vec<CollectibleConfig>> = Lazy::new(|| {
                 clockwise: true,
                 speed: 2.0,
             }),
+            // All collectibles will be spawned with Interactable in spawn_collectible
         },
         CollectibleConfig {
             position: Vec3::new(25.0, 2.0, 60.0),

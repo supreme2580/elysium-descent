@@ -2,8 +2,12 @@ use crate::constants::dojo::PICKUP_ITEM_SELECTOR;
 use crate::screens::Screen;
 use crate::systems::collectibles::CollectibleType;
 use bevy::prelude::*;
-use dojo_bevy_plugin::{DojoEntityUpdated, DojoResource, TokioRuntime};
+use dojo_bevy_plugin::TokioRuntime;
+use dojo_bevy_plugin::{DojoEntityUpdated, DojoResource};
+use futures::FutureExt;
+use starknet::accounts::Account;
 use starknet::core::types::Call;
+use tokio::task::JoinHandle;
 
 /// Event to trigger item pickup on the blockchain
 #[derive(Event, Debug)]
@@ -16,7 +20,6 @@ pub struct PickupItemEvent {
 #[derive(Event, Debug)]
 pub struct ItemPickedUpEvent {
     pub item_type: CollectibleType,
-    pub item_entity: Entity,
     pub transaction_hash: String,
 }
 
@@ -33,15 +36,24 @@ pub struct PickupTransactionState {
     pub pending_pickups: Vec<(Entity, CollectibleType)>,
 }
 
+#[derive(Resource, Default)]
+pub struct PendingPickupTasks(
+    pub  Vec<
+        JoinHandle<Result<(Entity, CollectibleType, String), (Entity, CollectibleType, String)>>,
+    >,
+);
+
 pub(super) fn plugin(app: &mut App) {
     app.add_event::<PickupItemEvent>()
         .add_event::<ItemPickedUpEvent>()
         .add_event::<ItemPickupFailedEvent>()
         .init_resource::<PickupTransactionState>()
+        .init_resource::<PendingPickupTasks>()
         .add_systems(
             Update,
             (
                 handle_pickup_item_events,
+                poll_pickup_tasks,
                 handle_item_picked_up_events,
                 handle_item_pickup_failed_events,
                 handle_pickup_entity_updates,
@@ -53,84 +65,50 @@ pub(super) fn plugin(app: &mut App) {
 /// System to handle PickupItemEvent and call the blockchain
 fn handle_pickup_item_events(
     mut events: EventReader<PickupItemEvent>,
-    mut dojo: ResMut<DojoResource>,
-    tokio: Res<TokioRuntime>,
+    dojo: Res<DojoResource>,
     dojo_config: Res<super::DojoSystemState>,
-    mut pickup_state: ResMut<PickupTransactionState>,
-    _game_state: Res<super::create_game::GameState>,
-    mut item_picked_up_events: EventWriter<ItemPickedUpEvent>,
+    tokio: Res<TokioRuntime>,
+    mut pending_tasks: ResMut<PendingPickupTasks>,
 ) {
+    let account = dojo.sn.account.clone();
     for event in events.read() {
-        info!(
-            "Picking up {:?} item on blockchain (contract uses caller address for identification)",
-            event.item_type
-        );
-
-        // Create the contract call for pickup_item function
-        // pickup_item() - takes no parameters according to contract interface
         let call = Call {
             to: dojo_config.config.action_address,
             selector: PICKUP_ITEM_SELECTOR,
-            calldata: vec![], // No parameters required
+            calldata: vec![],
         };
-
-        // Queue the call to the blockchain
-        dojo.queue_tx(&tokio, vec![call]);
-
-        // Track this pickup transaction
-        pickup_state
-            .pending_pickups
-            .push((event.item_entity, event.item_type));
-
-        info!(
-            "Pickup item call queued successfully for {:?}",
-            event.item_type
-        );
-
-        // Since the contract currently always returns true and has no real logic,
-        // we can immediately trigger the success event to remove the item
-        // In a real implementation, this would wait for actual blockchain confirmation
-        info!("⚡ Fast-tracking item removal since contract is stubbed (always returns true)");
-
-        // Immediately trigger successful pickup to remove item from world
-        item_picked_up_events.write(ItemPickedUpEvent {
-            item_type: event.item_type,
-            item_entity: event.item_entity,
-            transaction_hash: "0x123456789abcdef".to_string(), // Mock transaction hash
+        let entity = event.item_entity;
+        let item_type = event.item_type;
+        let account = account.clone();
+        let handle = tokio.runtime.spawn(async move {
+            if let Some(account) = account {
+                let tx = account.execute_v3(vec![call]);
+                match tx.send().await {
+                    Ok(result) => {
+                        Ok((entity, item_type, format!("{:#x}", result.transaction_hash)))
+                    }
+                    Err(e) => Err((entity, item_type, format!("{:?}", e))),
+                }
+            } else {
+                Err((entity, item_type, "No account available".to_string()))
+            }
         });
-
-        warn!(
-            "🚀 Item pickup success event triggered for {:?}",
-            event.item_type
-        );
+        pending_tasks.0.push(handle);
     }
 }
 
 /// System to handle successful item pickup
 fn handle_item_picked_up_events(
     mut events: EventReader<ItemPickedUpEvent>,
-    mut commands: Commands,
-    world: &World,
+    // mut commands: Commands, // No longer needed for despawn
+    _world: &World,
 ) {
     for event in events.read() {
         info!(
             "Item pickup confirmed on blockchain! {:?} (TX: {})",
             event.item_type, event.transaction_hash
         );
-
-        // Check if the entity still exists before trying to despawn it
-        if world.get_entity(event.item_entity).is_ok() {
-            commands.entity(event.item_entity).despawn();
-            info!(
-                "Item {:?} successfully removed from game world",
-                event.item_type
-            );
-        } else {
-            info!(
-                "Item {:?} entity no longer exists (ID: {:?}) - likely already removed",
-                event.item_type, event.item_entity
-            );
-        }
+        // Entity is already despawned immediately on pickup
     }
 }
 
@@ -168,9 +146,9 @@ fn handle_pickup_entity_updates(
                     // For now, assume any inventory update means pickup succeeded
                     // In a full implementation, you'd parse the model data to confirm
                     if let Some((entity, item_type)) = pickup_state.pending_pickups.pop() {
+                        let _entity = entity;
                         item_picked_up_events.write(ItemPickedUpEvent {
                             item_type,
-                            item_entity: entity,
                             transaction_hash: "0x123".to_string(), // TODO: Extract real TX hash
                         });
                     }
@@ -185,4 +163,42 @@ fn handle_pickup_entity_updates(
             }
         }
     }
+}
+
+// Poll background tasks and emit events when done
+fn poll_pickup_tasks(
+    mut pending_tasks: ResMut<PendingPickupTasks>,
+    mut item_picked_up_events: EventWriter<ItemPickedUpEvent>,
+    mut item_pickup_failed_events: EventWriter<ItemPickupFailedEvent>,
+) {
+    pending_tasks.0.retain_mut(|handle| {
+        if let Some(result) = handle.now_or_never() {
+            match result {
+                Ok(Ok((entity, item_type, tx_hash))) => {
+                    let _entity = entity;
+                    info!(
+                        "Blockchain pickup tx completed: {} for {:?}",
+                        tx_hash, item_type
+                    );
+                    item_picked_up_events.write(ItemPickedUpEvent {
+                        item_type,
+                        transaction_hash: tx_hash,
+                    });
+                }
+                Ok(Err((entity, item_type, err))) => {
+                    let _entity = entity;
+                    item_pickup_failed_events.write(ItemPickupFailedEvent {
+                        item_type,
+                        error: err,
+                    });
+                }
+                Err(join_err) => {
+                    error!("JoinHandle error in pickup task: {:?}", join_err);
+                }
+            }
+            false // Remove finished handle
+        } else {
+            true // Keep unfinished handle
+        }
+    });
 }

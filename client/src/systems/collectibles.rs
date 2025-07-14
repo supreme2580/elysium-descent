@@ -3,15 +3,10 @@ use avian3d::prelude::*;
 use bevy::prelude::*;
 
 use crate::screens::Screen;
+use crate::systems::character_controller::CharacterController;
 use crate::systems::dojo::PickupItemEvent;
-use crate::{systems::character_controller::CharacterController, ui::inventory};
 
 // ===== COMPONENTS & RESOURCES =====
-
-#[derive(Resource)]
-pub struct CollectibleCounter {
-    pub collectibles_collected: u32,
-}
 
 #[derive(Component)]
 pub struct Collectible;
@@ -46,7 +41,7 @@ pub struct NextItemToAdd(pub CollectibleType);
 pub struct Sensor;
 
 /// Component marking objects that can be interacted with
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 pub struct Interactable {
     pub interaction_radius: f32,
 }
@@ -54,17 +49,6 @@ pub struct Interactable {
 /// Event triggered when player presses interaction key
 #[derive(Event, Debug)]
 pub struct InteractionEvent;
-
-/// Event triggered when player starts being near an interactable object
-#[derive(Event, Debug)]
-pub struct InteractionPromptEvent;
-
-/// Resource to track current interactable object
-#[derive(Resource, Default)]
-pub struct NearbyInteractable {
-    pub entity: Option<Entity>,
-    pub distance: f32,
-}
 
 // Configuration for spawning collectibles
 #[derive(Clone)]
@@ -81,26 +65,20 @@ pub struct CollectiblesPlugin;
 
 impl Plugin for CollectiblesPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(CollectibleCounter {
-            collectibles_collected: 0,
-        })
-        .add_event::<InteractionEvent>()
-        .add_event::<InteractionPromptEvent>()
-        .init_resource::<NearbyInteractable>()
-        .insert_resource(inventory::InventoryVisibilityState::default())
-        .add_systems(
-            Update,
-            (
-                collect_items,
-                update_floating_items,
-                rotate_collectibles,
-                detect_nearby_interactables,
-                handle_interactions,
-                inventory::add_item_to_inventory.run_if(in_state(Screen::GamePlay)),
-                inventory::toggle_inventory_visibility.run_if(in_state(Screen::GamePlay)),
-            )
-                .run_if(in_state(Screen::GamePlay)),
-        );
+        app.add_event::<InteractionEvent>()
+            .insert_resource(crate::ui::inventory::InventoryVisibilityState::default())
+            .add_systems(
+                Update,
+                (
+                    auto_collect_nearby_interactables,
+                    handle_interactions,
+                    update_floating_items,
+                    rotate_collectibles,
+                    crate::ui::inventory::add_item_to_inventory,
+                    crate::ui::inventory::toggle_inventory_visibility,
+                )
+                    .run_if(in_state(Screen::GamePlay)),
+            );
     }
 }
 
@@ -125,7 +103,7 @@ pub fn spawn_collectible(
             scale: Vec3::splat(config.scale),
             ..default()
         },
-        Collider::sphere(0.5), // Simple sphere collider - won't interfere with character movement
+        Collider::sphere(0.5),
         RigidBody::Kinematic,
         Visibility::Visible,
         InheritedVisibility::default(),
@@ -139,6 +117,9 @@ pub fn spawn_collectible(
         },
         Sensor,
         scene_marker.clone(),
+        Interactable {
+            interaction_radius: 4.0,
+        },
     ));
 
     if let Some(rotation) = config.rotation {
@@ -146,13 +127,13 @@ pub fn spawn_collectible(
     }
 }
 
-fn collect_items(
+/// System to automatically collect any collectible when the player is within the Interactable's radius
+fn auto_collect_nearby_interactables(
     mut commands: Commands,
-    mut collectible_counter: ResMut<CollectibleCounter>,
     player_query: Query<&Transform, With<CharacterController>>,
-    collectible_query: Query<
-        (Entity, &Transform, &CollectibleType, &Collectible),
-        (With<Sensor>, Without<Interactable>, Without<Collected>),
+    interactable_query: Query<
+        (Entity, &Transform, &Interactable, &CollectibleType),
+        Without<Collected>,
     >,
     mut pickup_events: EventWriter<PickupItemEvent>,
 ) {
@@ -160,50 +141,67 @@ fn collect_items(
         return;
     };
 
-    for (collectible_entity, collectible_transform, collectible_type, _collectible) in
-        collectible_query.iter()
-    {
-        let distance = player_transform
-            .translation
-            .distance(collectible_transform.translation);
-        if distance < 5.0 {
-            // Collection radius - only for non-interactable items (like Coin)
-            info!("Collected a {:?}!", collectible_type);
-            commands.insert_resource(NextItemToAdd(*collectible_type));
-
-            // Mark as collected to prevent double counting
-            commands.entity(collectible_entity).insert(Collected);
-
-            match collectible_type {
-                CollectibleType::Coin => {
-                    // Trigger blockchain transaction for Coin
-                    info!("🪙 Coin collected - triggering blockchain transaction");
-                    pickup_events.write(PickupItemEvent {
-                        item_type: *collectible_type,
-                        item_entity: collectible_entity,
-                    });
-
-                    // Note: The item will be removed from the world when the blockchain transaction is confirmed
-                    // in the pickup_item system's handle_item_picked_up_events
-                }
-                CollectibleType::Book => {
-                    // Trigger blockchain transaction for Book
-                    info!("📚 Book collected - triggering blockchain transaction");
-                    pickup_events.write(PickupItemEvent {
-                        item_type: *collectible_type,
-                        item_entity: collectible_entity,
-                    });
-
-                    // Note: The item will be removed from the world when the blockchain transaction is confirmed
-                    // in the pickup_item system's handle_item_picked_up_events
-                }
+    for (entity, transform, interactable, collectible_type) in interactable_query.iter() {
+        let distance = player_transform.translation.distance(transform.translation);
+        if distance <= interactable.interaction_radius {
+            if *collectible_type == CollectibleType::Coin {
+                // Mark as collected
+                commands.entity(entity).insert(Collected);
+                // Insert NextItemToAdd so inventory system will add it
+                commands.insert_resource(NextItemToAdd(*collectible_type));
+                // Despawn the entity immediately
+                commands.entity(entity).despawn();
+                // Trigger blockchain event
+                pickup_events.write(PickupItemEvent {
+                    item_type: *collectible_type,
+                    item_entity: entity,
+                });
             }
+        }
+    }
+}
 
-            collectible_counter.collectibles_collected += 1;
-            info!(
-                "Total collectibles collected: {}",
-                collectible_counter.collectibles_collected
-            );
+/// System to handle pressing E near a Book
+fn handle_interactions(
+    mut commands: Commands,
+    player_query: Query<&Transform, With<CharacterController>>,
+    interactable_query: Query<
+        (Entity, &Transform, &Interactable, &CollectibleType),
+        Without<Collected>,
+    >,
+    mut pickup_events: EventWriter<PickupItemEvent>,
+    mut interaction_events: EventReader<InteractionEvent>,
+    mut next_state: ResMut<NextState<Screen>>,
+) {
+    let Ok(player_transform) = player_query.single() else {
+        return;
+    };
+    let mut interacted = false;
+    for _ in interaction_events.read() {
+        for (entity, transform, interactable, collectible_type) in interactable_query.iter() {
+            let distance = player_transform.translation.distance(transform.translation);
+            if distance <= interactable.interaction_radius
+                && *collectible_type == CollectibleType::Book
+            {
+                // Mark as collected
+                commands.entity(entity).insert(Collected);
+                // Insert NextItemToAdd so inventory system will add it
+                commands.insert_resource(NextItemToAdd(*collectible_type));
+                // Despawn the entity immediately
+                commands.entity(entity).despawn();
+                // Trigger blockchain event
+                pickup_events.write(PickupItemEvent {
+                    item_type: *collectible_type,
+                    item_entity: entity,
+                });
+                // Transition to fight scene
+                next_state.set(Screen::FightScene);
+                interacted = true;
+                break;
+            }
+        }
+        if interacted {
+            break;
         }
     }
 }
@@ -228,98 +226,6 @@ pub fn rotate_collectibles(
                 -rotation.speed * time.delta_secs()
             };
             transform.rotate_y(rotation_amount);
-        }
-    }
-}
-
-/// System to detect when player is near interactable objects
-fn detect_nearby_interactables(
-    player_query: Query<&Transform, With<CharacterController>>,
-    interactable_query: Query<(Entity, &Transform, &Interactable), Without<Collected>>,
-    mut nearby_interactable: ResMut<NearbyInteractable>,
-    mut prompt_events: EventWriter<InteractionPromptEvent>,
-) {
-    let Ok(player_transform) = player_query.single() else {
-        return;
-    };
-
-    let mut closest_interactable: Option<(Entity, f32, &Interactable)> = None;
-
-    // Find the closest interactable within range
-    for (entity, transform, interactable) in interactable_query.iter() {
-        let distance = player_transform.translation.distance(transform.translation);
-
-        if distance <= interactable.interaction_radius {
-            if let Some((_, closest_distance, _)) = closest_interactable {
-                if distance < closest_distance {
-                    closest_interactable = Some((entity, distance, interactable));
-                }
-            } else {
-                closest_interactable = Some((entity, distance, interactable));
-            }
-        }
-    }
-
-    // Update nearby interactable state
-    match closest_interactable {
-        Some((entity, distance, _interactable)) => {
-            if nearby_interactable.entity != Some(entity) {
-                // New interactable entered range
-                nearby_interactable.entity = Some(entity);
-                nearby_interactable.distance = distance;
-                prompt_events.write(InteractionPromptEvent);
-            } else {
-                // Update distance for existing interactable
-                nearby_interactable.distance = distance;
-            }
-        }
-        None => {
-            if nearby_interactable.entity.is_some() {
-                // Left interaction range
-                nearby_interactable.entity = None;
-                nearby_interactable.distance = 0.0;
-                prompt_events.write(InteractionPromptEvent);
-            }
-        }
-    }
-}
-
-/// System to handle interaction events
-fn handle_interactions(
-    mut interaction_events: EventReader<InteractionEvent>,
-    mut commands: Commands,
-    nearby_interactable: Res<NearbyInteractable>,
-    interactable_query: Query<
-        (&CollectibleType, &Collectible),
-        (With<Interactable>, Without<Collected>),
-    >,
-    mut prompt_events: EventWriter<InteractionPromptEvent>,
-    mut next_state: ResMut<NextState<Screen>>,
-) {
-    for _event in interaction_events.read() {
-        if let Some(entity) = nearby_interactable.entity {
-            if let Ok((collectible_type, _collectible)) = interactable_query.get(entity) {
-                // Mark as collected to prevent double counting
-                commands.entity(entity).insert(Collected);
-
-                // Trigger dialogue for books, blockchain transaction for Coin, direct collection for others
-                match collectible_type {
-                    CollectibleType::Book => {
-                        // Transition to fight scene when book is interacted with
-                        info!("📚 Book interacted with - transitioning to fight scene");
-                        next_state.set(Screen::FightScene);
-                    }
-                    CollectibleType::Coin => {
-                        // Trigger blockchain transaction for Coin
-                        info!("🪙 Coin interacted with - triggering blockchain transaction");
-                        // Note: Counter is already incremented in collect_items system
-                        // No need to increment again here
-                    }
-                }
-
-                // Hide the interaction prompt
-                prompt_events.write(InteractionPromptEvent);
-            }
         }
     }
 }

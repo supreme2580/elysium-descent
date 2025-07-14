@@ -20,12 +20,15 @@ bevy_gltf_animation = "0.2.0"
 bevy_kira_audio = "0.23.0"
 bevy_lunex = "0.4.1"
 dojo_bevy_plugin = { git = "https://github.com/okhaimie-dev/dojo.bevy.git", rev = "6e2763d" }
+futures = "0.3.31"
+futures-lite = "2.6.0"
 log = { version = "0.4", features = [
     "max_level_debug",
     "release_max_level_warn",
 ] }
 once_cell = "1.21.3"
 starknet = "0.16.0"
+tokio = { version = "1.46.1", features = ["rt-multi-thread"] }
 tracing = { version = "0.1", features = [
     "max_level_debug",
     "release_max_level_warn",
