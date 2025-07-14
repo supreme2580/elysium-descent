@@ -14,7 +14,9 @@ pub fn plugin(app: &mut App) {
 struct MainMenuScene;
 
 /// Reset the UI camera to its proper state when entering main menu
-fn reset_ui_camera(mut ui_cameras: Query<&mut Transform, (With<Camera2d>, With<bevy_lunex::UiSourceCamera<0>>)>) {
+fn reset_ui_camera(
+    mut ui_cameras: Query<&mut Transform, (With<Camera2d>, With<bevy_lunex::UiSourceCamera<0>>)>,
+) {
     if let Ok(mut camera_transform) = ui_cameras.single_mut() {
         // Reset to the proper UI camera position
         *camera_transform = Transform::from_translation(Vec3::new(0.0, 0.0, 1000.0));

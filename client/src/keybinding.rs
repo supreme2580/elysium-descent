@@ -32,7 +32,8 @@ fn spawn_system_action(mut commands: Commands) {
 fn player_binding(trigger: Trigger<Binding<Player>>, mut players: Query<&mut Actions<Player>>) {
     if let Ok(mut actions) = players.get_mut(trigger.target()) {
         // Movement (WASD, Arrow Keys, Gamepad Left Stick)
-        actions.bind::<Move>()
+        actions
+            .bind::<Move>()
             .to((
                 Cardinal::wasd_keys(),
                 Axial::left_stick(),
@@ -43,21 +44,17 @@ fn player_binding(trigger: Trigger<Binding<Player>>, mut players: Query<&mut Act
         actions
             .bind::<Jump>()
             .to((KeyCode::Space, GamepadButton::South));
-        
+
         // Sprint (Shift keys)
         actions
             .bind::<Sprint>()
             .to((KeyCode::ShiftLeft, KeyCode::ShiftRight));
-        
+
         // Interact (E key)
-        actions
-            .bind::<Interact>()
-            .to(KeyCode::KeyE);
-        
+        actions.bind::<Interact>().to(KeyCode::KeyE);
+
         // Fight Move (X key, with or without shift)
-        actions
-            .bind::<FightMove>()
-            .to(KeyCode::KeyX);
+        actions.bind::<FightMove>().to(KeyCode::KeyX);
     } else {
         error!(
             "Failed to get player actions for entity {:?}",
@@ -110,7 +107,9 @@ fn apply_movement(
     if direction != Vec2::ZERO {
         // Convert Vec2 to avian3d Vector2
         let avian_direction = avian3d::math::Vector2::new(direction.x, direction.y);
-        movement_events.write(crate::systems::character_controller::MovementAction::Move(avian_direction));
+        movement_events.write(crate::systems::character_controller::MovementAction::Move(
+            avian_direction,
+        ));
         last_input.0 = direction;
     }
 }
@@ -246,7 +245,8 @@ fn handle_fight_move(
     keyboard: Res<ButtonInput<KeyCode>>,
 ) {
     if trigger.value {
-        let shift_pressed = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+        let shift_pressed =
+            keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
         if shift_pressed {
             movement_events.write(crate::systems::character_controller::MovementAction::FightMove2);
         } else {

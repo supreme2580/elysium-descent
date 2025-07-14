@@ -1,23 +1,37 @@
-use bevy::prelude::*;
-use bevy_gltf_animation::prelude::GltfSceneRoot;
 use super::{Screen, despawn_scene};
 use crate::assets::ModelAssets;
 use crate::systems::character_controller::CharacterControllerBundle;
-use avian3d::prelude::{Collider, ColliderConstructor, ColliderConstructorHierarchy, Friction, GravityScale, Restitution, RigidBody};
+use avian3d::prelude::{
+    Collider, ColliderConstructor, ColliderConstructorHierarchy, Friction, GravityScale,
+    Restitution, RigidBody,
+};
+use bevy::prelude::*;
 use bevy_enhanced_input::prelude::Actions;
+use bevy_gltf_animation::prelude::GltfSceneRoot;
 
 // ===== PLUGIN SETUP =====
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(Screen::FightScene), spawn_fight_scene)
         .add_systems(OnExit(Screen::FightScene), despawn_scene::<FightScene>)
-        .add_systems(Update, handle_fight_input.run_if(in_state(Screen::FightScene)))
-        .add_systems(Update, camera_follow_fight_player.run_if(in_state(Screen::FightScene)));
+        .add_systems(
+            Update,
+            handle_fight_input.run_if(in_state(Screen::FightScene)),
+        )
+        .add_systems(
+            Update,
+            camera_follow_fight_player.run_if(in_state(Screen::FightScene)),
+        );
 }
 
 // ===== SYSTEMS =====
 
-fn spawn_fight_scene(mut commands: Commands, assets: Res<ModelAssets>, ui_assets: Res<crate::assets::UiAssets>, font_assets: Res<crate::assets::FontAssets>) {
+fn spawn_fight_scene(
+    mut commands: Commands,
+    assets: Res<ModelAssets>,
+    ui_assets: Res<crate::assets::UiAssets>,
+    font_assets: Res<crate::assets::FontAssets>,
+) {
     // Set up ambient light (match gameplay)
     commands.insert_resource(AmbientLight {
         color: Color::srgb_u8(68, 71, 88),
@@ -103,46 +117,48 @@ fn spawn_fight_scene(mut commands: Commands, assets: Res<ModelAssets>, ui_assets
     ));
 
     // Add a simple UI text to show we're in the fight scene
-    commands.spawn((
-        Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            ..default()
-        },
-        FightScene,
-    )).with_children(|parent| {
-        // Health bars row
-        // Use player_hud_widget for both player and enemy
-        parent.spawn(crate::ui::widgets::player_hud_widget(
-            ui_assets.player_avatar.clone(),
-            "Player",
-            2, // example level
-            (80, 100), // example health
-            (50, 100), // example xp
-            font_assets.rajdhani_bold.clone(),
-            crate::ui::widgets::HudPosition::Left,
-        ));
-        parent.spawn(crate::ui::widgets::player_hud_widget(
-            ui_assets.enemy_avatar.clone(),
-            "Enemy",
-            3, // example level
-            (120, 150), // example health
-            (90, 100), // example xp
-            font_assets.rajdhani_medium.clone(),
-            crate::ui::widgets::HudPosition::Right,
-        ));
-        parent.spawn((
-            Text::new("FIGHT SCENE\nPress ESC to return to gameplay"),
-            TextFont {
-                font_size: 40.0,
+    commands
+        .spawn((
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
                 ..default()
             },
-            TextColor::WHITE,
             FightScene,
-        ));
-    });
+        ))
+        .with_children(|parent| {
+            // Health bars row
+            // Use player_hud_widget for both player and enemy
+            parent.spawn(crate::ui::widgets::player_hud_widget(
+                ui_assets.player_avatar.clone(),
+                "Player",
+                2,         // example level
+                (80, 100), // example health
+                (50, 100), // example xp
+                font_assets.rajdhani_bold.clone(),
+                crate::ui::widgets::HudPosition::Left,
+            ));
+            parent.spawn(crate::ui::widgets::player_hud_widget(
+                ui_assets.enemy_avatar.clone(),
+                "Enemy",
+                3,          // example level
+                (120, 150), // example health
+                (90, 100),  // example xp
+                font_assets.rajdhani_medium.clone(),
+                crate::ui::widgets::HudPosition::Right,
+            ));
+            parent.spawn((
+                Text::new("FIGHT SCENE\nPress ESC to return to gameplay"),
+                TextFont {
+                    font_size: 40.0,
+                    ..default()
+                },
+                TextColor::WHITE,
+                FightScene,
+            ));
+        });
 }
 
 fn handle_fight_input(
@@ -156,8 +172,21 @@ fn handle_fight_input(
 }
 
 fn camera_follow_fight_player(
-    player_query: Query<&Transform, (With<crate::systems::character_controller::CharacterController>, With<FightScene>)>,
-    mut camera_query: Query<&mut Transform, (With<Camera3d>, With<FightScene>, Without<crate::systems::character_controller::CharacterController>)>,
+    player_query: Query<
+        &Transform,
+        (
+            With<crate::systems::character_controller::CharacterController>,
+            With<FightScene>,
+        ),
+    >,
+    mut camera_query: Query<
+        &mut Transform,
+        (
+            With<Camera3d>,
+            With<FightScene>,
+            Without<crate::systems::character_controller::CharacterController>,
+        ),
+    >,
     time: Res<Time>,
 ) {
     if let Ok(player_transform) = player_query.single() {
@@ -183,4 +212,4 @@ fn camera_follow_fight_player(
 // ===== SCENE MARKER =====
 
 #[derive(Component, Default, Clone)]
-struct FightScene; 
+struct FightScene;

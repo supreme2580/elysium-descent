@@ -2,9 +2,9 @@ use crate::assets::ModelAssets;
 use avian3d::prelude::*;
 use bevy::prelude::*;
 
+use crate::screens::Screen;
 use crate::systems::dojo::PickupItemEvent;
 use crate::{systems::character_controller::CharacterController, ui::inventory};
-use crate::screens::Screen;
 
 // ===== COMPONENTS & RESOURCES =====
 
@@ -39,10 +39,8 @@ pub enum CollectibleType {
     Coin,
 }
 
-
 #[derive(Resource)]
 pub struct NextItemToAdd(pub CollectibleType);
-
 
 #[derive(Component)]
 pub struct Sensor;
@@ -93,8 +91,8 @@ impl Plugin for CollectiblesPlugin {
         .add_systems(
             Update,
             (
-                collect_items, 
-                update_floating_items, 
+                collect_items,
+                update_floating_items,
                 rotate_collectibles,
                 detect_nearby_interactables,
                 handle_interactions,
@@ -107,7 +105,6 @@ impl Plugin for CollectiblesPlugin {
 }
 
 // ===== SYSTEMS =====
-
 
 pub fn spawn_collectible(
     commands: &mut Commands,
@@ -153,7 +150,10 @@ fn collect_items(
     mut commands: Commands,
     mut collectible_counter: ResMut<CollectibleCounter>,
     player_query: Query<&Transform, With<CharacterController>>,
-    collectible_query: Query<(Entity, &Transform, &CollectibleType, &Collectible), (With<Sensor>, Without<Interactable>, Without<Collected>)>,
+    collectible_query: Query<
+        (Entity, &Transform, &CollectibleType, &Collectible),
+        (With<Sensor>, Without<Interactable>, Without<Collected>),
+    >,
     mut pickup_events: EventWriter<PickupItemEvent>,
 ) {
     let Ok(player_transform) = player_query.single() else {
@@ -182,7 +182,7 @@ fn collect_items(
                         item_type: *collectible_type,
                         item_entity: collectible_entity,
                     });
-                    
+
                     // Note: The item will be removed from the world when the blockchain transaction is confirmed
                     // in the pickup_item system's handle_item_picked_up_events
                 }
@@ -193,7 +193,7 @@ fn collect_items(
                         item_type: *collectible_type,
                         item_entity: collectible_entity,
                     });
-                    
+
                     // Note: The item will be removed from the world when the blockchain transaction is confirmed
                     // in the pickup_item system's handle_item_picked_up_events
                 }
@@ -207,7 +207,6 @@ fn collect_items(
         }
     }
 }
-
 
 fn update_floating_items(time: Res<Time>, mut query: Query<(&FloatingItem, &mut Transform)>) {
     for (floating, mut transform) in query.iter_mut() {
@@ -249,7 +248,7 @@ fn detect_nearby_interactables(
     // Find the closest interactable within range
     for (entity, transform, interactable) in interactable_query.iter() {
         let distance = player_transform.translation.distance(transform.translation);
-        
+
         if distance <= interactable.interaction_radius {
             if let Some((_, closest_distance, _)) = closest_interactable {
                 if distance < closest_distance {
@@ -290,7 +289,10 @@ fn handle_interactions(
     mut interaction_events: EventReader<InteractionEvent>,
     mut commands: Commands,
     nearby_interactable: Res<NearbyInteractable>,
-    interactable_query: Query<(&CollectibleType, &Collectible), (With<Interactable>, Without<Collected>)>,
+    interactable_query: Query<
+        (&CollectibleType, &Collectible),
+        (With<Interactable>, Without<Collected>),
+    >,
     mut prompt_events: EventWriter<InteractionPromptEvent>,
     mut next_state: ResMut<NextState<Screen>>,
 ) {
@@ -299,7 +301,7 @@ fn handle_interactions(
             if let Ok((collectible_type, _collectible)) = interactable_query.get(entity) {
                 // Mark as collected to prevent double counting
                 commands.entity(entity).insert(Collected);
-                
+
                 // Trigger dialogue for books, blockchain transaction for Coin, direct collection for others
                 match collectible_type {
                     CollectibleType::Book => {
@@ -346,10 +348,7 @@ pub fn spawn_interactable_book(
     ));
 
     // Add physics components - simple sphere collider to avoid character movement interference
-    entity.insert((
-        Collider::sphere(0.5),
-        RigidBody::Kinematic,
-    ));
+    entity.insert((Collider::sphere(0.5), RigidBody::Kinematic));
 
     // Add visibility components
     entity.insert((

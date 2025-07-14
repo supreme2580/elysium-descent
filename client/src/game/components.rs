@@ -40,4 +40,4 @@ pub struct PlayerInput;
 // pub struct OptionsButton;
 
 // #[derive(Component)]
-// pub struct QuitGameButton; 
+// pub struct QuitGameButton;

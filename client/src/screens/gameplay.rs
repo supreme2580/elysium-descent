@@ -3,30 +3,45 @@ use bevy::prelude::*;
 use bevy_gltf_animation::prelude::*;
 
 use super::{Screen, despawn_scene};
-use crate::assets::{ModelAssets, FontAssets, UiAssets};
+use crate::assets::{FontAssets, ModelAssets, UiAssets};
+use crate::keybinding;
 use crate::systems::character_controller::{
     CharacterController, CharacterControllerBundle, CharacterControllerPlugin, setup_idle_animation,
 };
-use crate::keybinding;
-use bevy_enhanced_input::prelude::*;
-use crate::systems::collectibles::{CollectiblesPlugin, spawn_collectible, spawn_interactable_book, CollectibleType};
+use crate::systems::collectibles::{
+    CollectibleType, CollectiblesPlugin, spawn_collectible, spawn_interactable_book,
+};
 use crate::systems::collectibles_config::COLLECTIBLES;
+use crate::ui::dialog::{DialogPlugin, create_book_dialog, spawn_dialog};
 use crate::ui::inventory::spawn_inventory_ui;
-use crate::ui::dialog::{DialogPlugin, spawn_dialog, create_book_dialog};
-use crate::ui::widgets::{player_hud_widget, HudPosition};
+use crate::ui::widgets::{HudPosition, player_hud_widget};
+use bevy_enhanced_input::prelude::*;
 
 // ===== PLUGIN SETUP =====
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(Screen::GamePlay), (PlayingScene::spawn_environment, set_gameplay_clear_color, spawn_book_dialog))
-        .add_systems(Update, camera_follow_player.run_if(in_state(Screen::GamePlay)))
-        .add_systems(OnExit(Screen::GamePlay), (despawn_scene::<PlayingScene>, despawn_gameplay_hud))
-        .add_plugins(PhysicsPlugins::default())
-        // .add_plugins(PhysicsDebugPlugin::default())
-        .add_plugins(CharacterControllerPlugin)
-        .add_plugins(GltfAnimationPlugin)
-        .add_plugins(CollectiblesPlugin)
-        .add_plugins(DialogPlugin);
+    app.add_systems(
+        OnEnter(Screen::GamePlay),
+        (
+            PlayingScene::spawn_environment,
+            set_gameplay_clear_color,
+            spawn_book_dialog,
+        ),
+    )
+    .add_systems(
+        Update,
+        camera_follow_player.run_if(in_state(Screen::GamePlay)),
+    )
+    .add_systems(
+        OnExit(Screen::GamePlay),
+        (despawn_scene::<PlayingScene>, despawn_gameplay_hud),
+    )
+    .add_plugins(PhysicsPlugins::default())
+    // .add_plugins(PhysicsDebugPlugin::default())
+    .add_plugins(CharacterControllerPlugin)
+    .add_plugins(GltfAnimationPlugin)
+    .add_plugins(CollectiblesPlugin)
+    .add_plugins(DialogPlugin);
 }
 
 // ===== SYSTEMS =====
@@ -37,7 +52,14 @@ fn set_gameplay_clear_color(mut commands: Commands) {
 
 fn camera_follow_player(
     player_query: Query<&Transform, With<CharacterController>>,
-    mut camera_query: Query<&mut Transform, (With<Camera3d>, With<PlayingScene>, Without<CharacterController>)>,
+    mut camera_query: Query<
+        &mut Transform,
+        (
+            With<Camera3d>,
+            With<PlayingScene>,
+            Without<CharacterController>,
+        ),
+    >,
     time: Res<Time>,
 ) {
     if let Ok(player_transform) = player_query.single() {
@@ -69,11 +91,7 @@ struct EnvironmentMarker;
 #[derive(Component)]
 struct GameplayHud;
 
-fn spawn_book_dialog(
-    commands: Commands,
-    font_assets: Res<FontAssets>,
-    windows: Query<&Window>,
-) {
+fn spawn_book_dialog(commands: Commands, font_assets: Res<FontAssets>, windows: Query<&Window>) {
     let mut dialog_config = create_book_dialog();
     dialog_config.height = 14.0; // Custom height for this usage
     spawn_dialog(commands, font_assets, windows, dialog_config, PlayingScene);
@@ -92,7 +110,10 @@ fn spawn_player_hud(
     let xp = (80, 100);
     let font = font_assets.rajdhani_bold.clone();
 
-    commands.spawn((player_hud_widget(avatar, name, level, health, xp, font, HudPosition::Left), GameplayHud));
+    commands.spawn((
+        player_hud_widget(avatar, name, level, health, xp, font, HudPosition::Left),
+        GameplayHud,
+    ));
 }
 
 fn despawn_gameplay_hud(mut commands: Commands, query: Query<Entity, With<GameplayHud>>) {
@@ -168,7 +189,7 @@ impl PlayingScene {
                 // Add enhanced input actions for this player
                 Actions::<keybinding::Player>::default(),
                 PlayingScene, // Add scene marker to ensure cleanup
-                // DebugRender::default(),
+                              // DebugRender::default(),
             ))
             .observe(setup_idle_animation);
 

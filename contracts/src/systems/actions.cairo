@@ -1,8 +1,8 @@
 use elysium_descent::models::{
-    Game, GameStatus, PlayerStats, GameCounter, GAME_COUNTER_ID, ItemType, PlayerInventory,
-    LevelItems, WorldItem,
+    GAME_COUNTER_ID, Game, GameCounter, GameStatus, ItemType, LevelItems, PlayerInventory,
+    PlayerStats, WorldItem,
 };
-use starknet::{get_block_timestamp, ContractAddress};
+use starknet::{ContractAddress, get_block_timestamp};
 
 // define the interface
 #[starknet::interface]
@@ -19,15 +19,14 @@ pub trait IActions<T> {
 // dojo decorator
 #[dojo::contract]
 pub mod actions {
-    use super::{
-        IActions, Game, GameStatus, PlayerStats, GameCounter, GAME_COUNTER_ID, get_block_timestamp,
-        ItemType, PlayerInventory, LevelItems, WorldItem,
-    };
-    use starknet::{ContractAddress, get_caller_address};
     use core::poseidon::poseidon_hash_span;
-
-    use dojo::model::{ModelStorage};
     use dojo::event::EventStorage;
+    use dojo::model::ModelStorage;
+    use starknet::{ContractAddress, get_caller_address};
+    use super::{
+        GAME_COUNTER_ID, Game, GameCounter, GameStatus, IActions, ItemType, LevelItems,
+        PlayerInventory, PlayerStats, WorldItem, get_block_timestamp,
+    };
 
     #[derive(Copy, Drop, Serde)]
     #[dojo::event]

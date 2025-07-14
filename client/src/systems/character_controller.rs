@@ -12,12 +12,7 @@ impl Plugin for CharacterControllerPlugin {
             .add_event::<MovementAction>()
             .add_systems(
                 Update,
-                (
-                    movement,
-                    apply_movement_damping,
-                    update_animations,
-                )
-                    .chain(),
+                (movement, apply_movement_damping, update_animations).chain(),
             );
     }
 }
@@ -35,14 +30,11 @@ pub enum MovementAction {
 #[derive(Component)]
 pub struct CharacterController;
 
-
-
 /// Component to track stair climbing state for smoother transitions
 #[derive(Component)]
 pub struct StairClimbingState {
     // Reserved for future stair climbing state tracking
 }
-
 
 /// The strength of a jump.
 #[derive(Component)]
@@ -102,7 +94,6 @@ impl Default for JumpCooldown {
     }
 }
 
-
 /// Responds to [`MovementAction`] events and moves character controllers accordingly
 fn movement(
     time: Res<Time>,
@@ -153,7 +144,7 @@ fn movement(
 
                     // Apply movement with stability for running
                     let target_velocity = movement_direction * target_speed;
-                    
+
                     // Use more stable interpolation for running
                     let interpolation_factor = if animation_state.forward_hold_time >= 3.0 {
                         // More stable interpolation for running
@@ -199,7 +190,7 @@ fn apply_movement_damping(
         let horizontal_speed = Vec2::new(linear_velocity.x, linear_velocity.z).length();
         let is_moving_horizontally = horizontal_speed > 0.1;
         let is_rising_gradually = linear_velocity.y > 0.1 && linear_velocity.y < 2.0;
-        
+
         // If moving horizontally and rising gradually, this is likely unwanted climbing
         if is_moving_horizontally && is_rising_gradually {
             // Reduce the climbing effect
@@ -208,7 +199,7 @@ fn apply_movement_damping(
             linear_velocity.x *= 0.8;
             linear_velocity.z *= 0.8;
         }
-        
+
         // Apply different damping based on movement state
         let damping_factor = if animation_state.forward_hold_time >= 3.0 {
             // More stable damping for running
@@ -231,7 +222,6 @@ fn apply_movement_damping(
         }
     }
 }
-
 
 #[derive(Component)]
 pub struct AnimationState {
@@ -330,12 +320,12 @@ pub fn setup_idle_animation(
 impl CharacterControllerBundle {
     pub fn new() -> Self {
         // Improved collider for better collision handling
-        let length = 0.5;  // Reduced height to prevent climbing
+        let length = 0.5; // Reduced height to prevent climbing
         let radius = 0.2; // Smaller radius for more precise collision
         let offset = Vec3::new(0.0, (length / 2.0) + radius, 0.0);
         let capsule = Collider::capsule(radius, length);
         let collider = Collider::compound(vec![(offset, Quat::IDENTITY, capsule)]);
-        
+
         // Smaller ground caster for more precise ground detection
         let caster_shape = Collider::sphere(0.2);
 

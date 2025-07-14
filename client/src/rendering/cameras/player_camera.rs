@@ -1,8 +1,5 @@
 use crate::game::Player;
-use bevy::{
-    input::mouse::MouseWheel,
-    prelude::*,
-};
+use bevy::{input::mouse::MouseWheel, prelude::*};
 
 /// A third-person camera that follows the player
 #[derive(Component)]
@@ -39,24 +36,24 @@ fn update_camera_position(
         // Calculate desired camera position
         let player_pos = player_transform.translation;
         let player_forward = player_transform.forward();
-        
+
         // Calculate camera position in front of player (opposite of before)
         let target_pos = player_pos + player_forward * camera.distance;
         let target_pos = Vec3::new(
             target_pos.x,
             player_pos.y + camera.height_offset,
-            target_pos.z
+            target_pos.z,
         );
-        
+
         // Smoothly move camera to target position
         transform.translation = transform.translation.lerp(
             target_pos,
-            (camera.smooth_speed * time.delta_secs()).min(1.0)
+            (camera.smooth_speed * time.delta_secs()).min(1.0),
         );
-        
+
         // Calculate look target (behind player now)
         let look_target = player_pos - player_forward * camera.look_ahead;
-        
+
         // Make camera look at target
         transform.look_at(look_target, Vec3::Y);
     }
@@ -80,4 +77,4 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, (update_camera_position, handle_camera_zoom));
     }
-} 
+}

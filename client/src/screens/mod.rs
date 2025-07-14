@@ -1,8 +1,8 @@
+mod fight;
 mod gameplay;
 mod loading;
 mod main_menu;
 mod settings;
-mod fight;
 
 use bevy::prelude::*;
 
@@ -30,7 +30,13 @@ pub(super) fn plugin(app: &mut App) {
     app.init_state::<Screen>()
         .add_systems(Startup, initial_state_setup)
         .add_systems(Update, handle_new_game_transition)
-        .add_plugins((main_menu::plugin, settings::plugin, loading::plugin, gameplay::plugin, fight::plugin));
+        .add_plugins((
+            main_menu::plugin,
+            settings::plugin,
+            loading::plugin,
+            gameplay::plugin,
+            fight::plugin,
+        ));
 }
 
 fn initial_state_setup(mut next_state: ResMut<NextState<Screen>>) {

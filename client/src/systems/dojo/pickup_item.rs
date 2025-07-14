@@ -76,28 +76,33 @@ fn handle_pickup_item_events(
 
         // Queue the call to the blockchain
         dojo.queue_tx(&tokio, vec![call]);
-        
+
         // Track this pickup transaction
-        pickup_state.pending_pickups.push((event.item_entity, event.item_type));
-        
+        pickup_state
+            .pending_pickups
+            .push((event.item_entity, event.item_type));
+
         info!(
             "Pickup item call queued successfully for {:?}",
             event.item_type
         );
-        
+
         // Since the contract currently always returns true and has no real logic,
         // we can immediately trigger the success event to remove the item
         // In a real implementation, this would wait for actual blockchain confirmation
         info!("⚡ Fast-tracking item removal since contract is stubbed (always returns true)");
-        
+
         // Immediately trigger successful pickup to remove item from world
         item_picked_up_events.write(ItemPickedUpEvent {
             item_type: event.item_type,
             item_entity: event.item_entity,
             transaction_hash: "0x123456789abcdef".to_string(), // Mock transaction hash
         });
-        
-        warn!("🚀 Item pickup success event triggered for {:?}", event.item_type);
+
+        warn!(
+            "🚀 Item pickup success event triggered for {:?}",
+            event.item_type
+        );
     }
 }
 
@@ -116,27 +121,33 @@ fn handle_item_picked_up_events(
         // Check if the entity still exists before trying to despawn it
         if world.get_entity(event.item_entity).is_ok() {
             commands.entity(event.item_entity).despawn();
-            info!("Item {:?} successfully removed from game world", event.item_type);
+            info!(
+                "Item {:?} successfully removed from game world",
+                event.item_type
+            );
         } else {
-            info!("Item {:?} entity no longer exists (ID: {:?}) - likely already removed", 
-                  event.item_type, event.item_entity);
+            info!(
+                "Item {:?} entity no longer exists (ID: {:?}) - likely already removed",
+                event.item_type, event.item_entity
+            );
         }
     }
 }
 
 /// System to handle failed item pickup
-fn handle_item_pickup_failed_events(
-    mut events: EventReader<ItemPickupFailedEvent>,
-) {
+fn handle_item_pickup_failed_events(mut events: EventReader<ItemPickupFailedEvent>) {
     for event in events.read() {
         error!(
             "Item pickup failed for {:?}: {}",
             event.item_type, event.error
         );
-        
+
         // TODO: Show error message to user
         // TODO: Optionally retry the pickup
-        warn!("Item {:?} remains in game world due to pickup failure", event.item_type);
+        warn!(
+            "Item {:?} remains in game world due to pickup failure",
+            event.item_type
+        );
     }
 }
 
@@ -153,7 +164,7 @@ fn handle_pickup_entity_updates(
             match model.name.as_str() {
                 "PlayerInventory" => {
                     info!("PlayerInventory updated - item pickup may have succeeded");
-                    
+
                     // For now, assume any inventory update means pickup succeeded
                     // In a full implementation, you'd parse the model data to confirm
                     if let Some((entity, item_type)) = pickup_state.pending_pickups.pop() {
