@@ -10,6 +10,7 @@ pub struct CreateGameEvent;
 
 /// Event emitted when a game is successfully created
 #[derive(Event, Debug)]
+#[allow(dead_code)]
 pub struct GameCreatedEvent {
     pub game_id: u32,
     pub player_address: String,
@@ -17,6 +18,7 @@ pub struct GameCreatedEvent {
 
 /// Event emitted when game creation fails
 #[derive(Event, Debug)]
+#[allow(dead_code)]
 pub struct GameCreationFailedEvent {
     pub error: String,
 }
@@ -24,14 +26,19 @@ pub struct GameCreationFailedEvent {
 /// Resource to track the current game state
 #[derive(Resource, Debug, Default)]
 pub struct GameState {
+    #[allow(dead_code)]
     pub current_game_id: Option<u32>,
+    #[allow(dead_code)]
     pub is_creating_game: bool,
+    #[allow(dead_code)]
     pub player_address: Option<String>,
+    #[allow(dead_code)]
     pub subscribed_to_entities: bool,
 }
 
 /// Represents a Game entity from the blockchain
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct GameEntity {
     pub game_id: u32,
     pub player: String,
@@ -41,10 +48,12 @@ pub struct GameEntity {
 
 /// Event emitted when game entity data is received from Torii
 #[derive(Event, Debug)]
+#[allow(dead_code)]
 pub struct GameDataReceivedEvent {
     pub game: GameEntity,
 }
 
+#[allow(dead_code)]
 pub(super) fn plugin(app: &mut App) {
     app.add_event::<CreateGameEvent>()
         .add_event::<GameCreatedEvent>()
@@ -67,6 +76,7 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 /// System to automatically create a game when entering gameplay (if not already created)
+#[allow(dead_code)]
 fn auto_create_game_system(
     mut create_game_events: EventWriter<CreateGameEvent>,
     game_state: Res<GameState>,
@@ -78,6 +88,7 @@ fn auto_create_game_system(
 }
 
 /// System to handle CreateGameEvent and call the blockchain
+#[allow(dead_code)]
 fn handle_create_game_events(
     mut events: EventReader<CreateGameEvent>,
     mut dojo: ResMut<DojoResource>,
@@ -124,6 +135,7 @@ fn handle_create_game_events(
 }
 
 /// System to handle successful game creation
+#[allow(dead_code)]
 fn handle_game_created_events(
     mut events: EventReader<GameCreatedEvent>,
     mut game_state: ResMut<GameState>,
@@ -144,6 +156,7 @@ fn handle_game_created_events(
 }
 
 /// System to handle failed game creation
+#[allow(dead_code)]
 fn handle_game_creation_failed_events(
     mut events: EventReader<GameCreationFailedEvent>,
     mut game_state: ResMut<GameState>,
@@ -158,6 +171,7 @@ fn handle_game_creation_failed_events(
 }
 
 /// System to subscribe to game entities when needed
+#[allow(dead_code)]
 fn subscribe_to_game_entities(
     mut dojo: ResMut<DojoResource>,
     tokio: Res<TokioRuntime>,
@@ -173,6 +187,7 @@ fn subscribe_to_game_entities(
 }
 
 /// System to handle entity updates from Dojo/Torii
+#[allow(dead_code)]
 fn handle_dojo_entity_updates(
     mut dojo_events: EventReader<DojoEntityUpdated>,
     mut game_created_events: EventWriter<GameCreatedEvent>,
@@ -229,6 +244,7 @@ fn handle_dojo_entity_updates(
 }
 
 /// System to fetch game data after successful creation
+#[allow(dead_code)]
 fn fetch_game_data_after_creation(
     mut game_data_events: EventReader<GameDataReceivedEvent>,
     game_state: Res<GameState>,

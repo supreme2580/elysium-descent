@@ -11,38 +11,50 @@ use tokio::task::JoinHandle;
 
 /// Event to trigger item pickup on the blockchain
 #[derive(Event, Debug)]
+#[allow(dead_code)]
 pub struct PickupItemEvent {
+    #[allow(dead_code)]
     pub item_type: CollectibleType,
+    #[allow(dead_code)]
     pub item_entity: Entity,
 }
 
 /// Event emitted when an item pickup is successfully processed on blockchain
 #[derive(Event, Debug)]
+#[allow(dead_code)]
 pub struct ItemPickedUpEvent {
+    #[allow(dead_code)]
     pub item_type: CollectibleType,
+    #[allow(dead_code)]
     pub transaction_hash: String,
 }
 
 /// Event emitted when item pickup fails
 #[derive(Event, Debug)]
+#[allow(dead_code)]
 pub struct ItemPickupFailedEvent {
+    #[allow(dead_code)]
     pub item_type: CollectibleType,
+    #[allow(dead_code)]
     pub error: String,
 }
 
 /// Resource to track pending pickup transactions
 #[derive(Resource, Debug, Default)]
 pub struct PickupTransactionState {
+    #[allow(dead_code)]
     pub pending_pickups: Vec<(Entity, CollectibleType)>,
 }
 
 #[derive(Resource, Default)]
 pub struct PendingPickupTasks(
+    #[allow(dead_code)]
     pub  Vec<
         JoinHandle<Result<(Entity, CollectibleType, String), (Entity, CollectibleType, String)>>,
     >,
 );
 
+#[allow(dead_code)]
 pub(super) fn plugin(app: &mut App) {
     app.add_event::<PickupItemEvent>()
         .add_event::<ItemPickedUpEvent>()
@@ -63,6 +75,7 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 /// System to handle PickupItemEvent and call the blockchain
+#[allow(dead_code)]
 fn handle_pickup_item_events(
     mut events: EventReader<PickupItemEvent>,
     dojo: Res<DojoResource>,
@@ -98,6 +111,7 @@ fn handle_pickup_item_events(
 }
 
 /// System to handle successful item pickup
+#[allow(dead_code)]
 fn handle_item_picked_up_events(
     mut events: EventReader<ItemPickedUpEvent>,
     // mut commands: Commands, // No longer needed for despawn
@@ -113,6 +127,7 @@ fn handle_item_picked_up_events(
 }
 
 /// System to handle failed item pickup
+#[allow(dead_code)]
 fn handle_item_pickup_failed_events(mut events: EventReader<ItemPickupFailedEvent>) {
     for event in events.read() {
         error!(
@@ -130,6 +145,7 @@ fn handle_item_pickup_failed_events(mut events: EventReader<ItemPickupFailedEven
 }
 
 /// System to handle entity updates from Dojo/Torii related to pickups
+#[allow(dead_code)]
 fn handle_pickup_entity_updates(
     mut dojo_events: EventReader<DojoEntityUpdated>,
     mut item_picked_up_events: EventWriter<ItemPickedUpEvent>,
@@ -166,6 +182,7 @@ fn handle_pickup_entity_updates(
 }
 
 // Poll background tasks and emit events when done
+#[allow(dead_code)]
 fn poll_pickup_tasks(
     mut pending_tasks: ResMut<PendingPickupTasks>,
     mut item_picked_up_events: EventWriter<ItemPickedUpEvent>,

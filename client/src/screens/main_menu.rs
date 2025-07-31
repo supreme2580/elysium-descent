@@ -20,7 +20,7 @@ fn reset_ui_camera(
     if let Ok(mut camera_transform) = ui_cameras.single_mut() {
         // Reset to the proper UI camera position
         *camera_transform = Transform::from_translation(Vec3::new(0.0, 0.0, 1000.0));
-        info!("UI camera reset to proper position");
+
     }
 }
 
@@ -177,8 +177,8 @@ fn spawn(mut commands: Commands, ui_assets: Res<UiAssets>, font_assets: Res<Font
                                 },
                                 "Continue" => {
                                     button_entity.observe(|_: Trigger<Pointer<Click>>, mut next: ResMut<NextState<Screen>>| {
-                                        // Change the state to settings
-                                        next.set(Screen::GamePlay);
+                                        // Change the state to PreGameLoading
+                                        next.set(Screen::PreGameLoading);
                                     });
                                 },
                                 "Quit Game" => {

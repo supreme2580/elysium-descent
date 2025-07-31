@@ -3,7 +3,7 @@ use crate::assets::ModelAssets;
 use crate::systems::character_controller::CharacterControllerBundle;
 use avian3d::prelude::{
     Collider, ColliderConstructor, ColliderConstructorHierarchy, Friction, GravityScale,
-    Restitution, RigidBody,
+    Restitution, RigidBody, CollisionEventsEnabled,
 };
 use bevy::prelude::*;
 use bevy_enhanced_input::prelude::Actions;
@@ -84,6 +84,7 @@ fn spawn_fight_scene(
             Friction::new(0.5),
             Restitution::new(0.0),
             GravityScale(1.0),
+            CollisionEventsEnabled, // Enable collision events
             Actions::<crate::keybinding::Player>::default(),
             FightScene,
         ))

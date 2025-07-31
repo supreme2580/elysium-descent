@@ -44,8 +44,8 @@ pub struct UiAssets {
     #[asset(path = "images/ui/components/chevron_right.png")]
     pub chevron_right: Handle<Image>,
 
-    #[asset(path = "images/collectibles/book.png")]
-    pub book: Handle<Image>,
+    #[asset(path = "images/ui/green-check-icon.png")]
+    pub green_check_icon: Handle<Image>,
 
     #[asset(path = "images/collectibles/coin.png")]
     pub coin: Handle<Image>,
@@ -55,6 +55,10 @@ pub struct UiAssets {
 
     #[asset(path = "avatars/enemy.png")]
     pub enemy_avatar: Handle<Image>,
+
+    // Decorative elements
+    #[asset(path = "images/ui/flower.png")]
+    pub flower: Handle<Image>,
 }
 
 // Audio Assets
@@ -65,6 +69,15 @@ pub struct AudioAssets {
 
     #[asset(path = "audio/intro.ogg")]
     pub intro_track: Handle<AudioSource>,
+
+    #[asset(path = "audio/coin.mp3")]
+    pub coin_sound: Handle<AudioSource>,
+
+    #[asset(path = "audio/walking.mp3")]
+    pub walking_sound: Handle<AudioSource>,
+
+    #[asset(path = "audio/running.mp3")]
+    pub running_sound: Handle<AudioSource>,
 }
 
 // Font Assets
@@ -83,9 +96,6 @@ pub struct FontAssets {
 // Model Assets (for future use)
 #[derive(AssetCollection, Resource)]
 pub struct ModelAssets {
-    #[asset(path = "models/book.glb#Scene0")]
-    pub book: Handle<Scene>,
-
     #[asset(path = "models/coin.glb#Scene0")]
     pub coin: Handle<Scene>,
 
@@ -100,6 +110,9 @@ pub struct ModelAssets {
 
     #[asset(path = "models/enemy.glb#Scene0")]
     pub enemy: Handle<Scene>,
+
+    #[asset(path = "models/book.glb#Scene0")]
+    pub book: Handle<Scene>,
 }
 
 // Movie/Video Assets

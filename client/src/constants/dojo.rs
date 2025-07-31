@@ -5,11 +5,17 @@ use std::env;
 /// Configuration for Dojo blockchain integration
 #[derive(Debug, Clone)]
 pub struct DojoConfig {
+    #[allow(dead_code)]
     pub torii_url: String,
+    #[allow(dead_code)]
     pub katana_url: String,
+    #[allow(dead_code)]
     pub world_address: Felt,
+    #[allow(dead_code)]
     pub action_address: Felt,
+    #[allow(dead_code)]
     pub use_dev_account: bool,
+    #[allow(dead_code)]
     pub dev_account_index: u32,
 }
 
@@ -51,5 +57,7 @@ impl Default for DojoConfig {
 }
 
 // Updated selectors for Elysium Descent contract functions
+#[allow(dead_code)]
 pub const CREATE_GAME_SELECTOR: Felt = selector!("create_game");
+#[allow(dead_code)]
 pub const PICKUP_ITEM_SELECTOR: Felt = selector!("pickup_item");

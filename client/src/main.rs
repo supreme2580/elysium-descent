@@ -2,7 +2,7 @@ use bevy::window::{PresentMode, WindowMode, WindowResolution};
 use bevy::{prelude::*, render::view::RenderLayers};
 use bevy_kira_audio::prelude::*;
 use bevy_lunex::prelude::*;
-use dojo_bevy_plugin::{DojoPlugin, DojoResource, TokioRuntime};
+use dojo_bevy_plugin::{DojoResource, TokioRuntime};
 
 mod constants;
 mod game;
@@ -13,12 +13,10 @@ mod screens;
 mod systems;
 mod ui;
 
-use systems::dojo;
-
 pub use resources::assets;
 pub use resources::audio;
 
-pub use resources::audio::GameAudioPlugin;
+pub use resources::audio::{GameAudioPlugin, SfxPlugin};
 
 fn main() -> AppExit {
     App::new()
@@ -41,10 +39,14 @@ fn main() -> AppExit {
         .add_plugins(AudioPlugin)
         .init_resource::<DojoResource>()
         .init_resource::<TokioRuntime>()
-        .add_plugins(DojoPlugin)
+        // .add_plugins(DojoPlugin) // Temporarily disabled for testing
         .add_plugins(assets::AssetsPlugin)
         .add_plugins(GameAudioPlugin)
-        .add_plugins((screens::plugin, keybinding::plugin, dojo::plugin))
+        .add_plugins(SfxPlugin)
+        .add_event::<systems::dojo::pickup_item::PickupItemEvent>()
+        .add_event::<systems::dojo::pickup_item::ItemPickedUpEvent>()
+        .add_event::<systems::dojo::pickup_item::ItemPickupFailedEvent>()
+        .add_plugins((screens::plugin, keybinding::plugin, /* dojo::plugin, */ ui::modal::ModalPlugin))
         .run()
 }
 

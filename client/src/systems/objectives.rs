@@ -1,0 +1,373 @@
+use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
+
+use crate::screens::Screen;
+use crate::systems::collectibles::CollectibleType;
+use crate::ui::styles::ElysiumDescentColorPalette;
+
+// ===== COMPONENTS & RESOURCES =====
+
+#[derive(Component)]
+pub struct ObjectiveUI;
+
+#[derive(Component)]
+pub struct ObjectiveSlot {
+    // Removed unused objective_id field
+}
+
+#[derive(Component)]
+pub struct ObjectiveCheckmark;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Objective {
+    pub id: usize,
+    pub title: String,
+    pub description: String,
+    pub item_type: CollectibleType,
+    pub required_count: u32,
+    pub current_count: u32,
+    pub completed: bool,
+}
+
+impl Objective {
+    pub fn new(id: usize, title: String, description: String, item_type: CollectibleType, required_count: u32) -> Self {
+        Self {
+            id,
+            title,
+            description,
+            item_type,
+            required_count,
+            current_count: 0,
+            completed: false,
+        }
+    }
+
+    // Removed unused is_completed and add_progress methods
+}
+
+#[derive(Resource, Default)]
+pub struct ObjectiveManager {
+    pub objectives: Vec<Objective>,
+    pub next_id: usize,
+}
+
+
+
+impl ObjectiveManager {
+    pub fn add_objective(&mut self, objective: Objective) {
+        self.objectives.push(objective);
+        self.next_id += 1;
+    }
+
+    // Removed unused update_progress, get_objective, and are_all_completed methods
+}
+
+// ===== PLUGIN =====
+
+pub struct ObjectivesPlugin;
+
+impl Plugin for ObjectivesPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<ObjectiveManager>()
+            .add_systems(OnEnter(Screen::GamePlay), setup_initial_objectives)
+            .add_systems(
+                Update,
+                (update_objective_ui,).run_if(in_state(Screen::GamePlay)),
+            );
+    }
+}
+
+// ===== SYSTEMS =====
+
+fn setup_initial_objectives(mut objective_manager: ResMut<ObjectiveManager>) {
+    // Clear any existing objectives
+    objective_manager.objectives.clear();
+    objective_manager.next_id = 0;
+
+    // Add objectives with different completion states (1/5, 2/5, 3/5, 4/5, 5/5)
+    let health_id = objective_manager.next_id;
+    let mut health_objective = Objective::new(health_id, "Collect Health Potions".to_string(), "Collect 5 Health Potions".to_string(), CollectibleType::HealthPotion, 5);
+    health_objective.current_count = 1; // 1/5 completed
+    objective_manager.add_objective(health_objective);
+
+    let survival_id = objective_manager.next_id;
+    let mut survival_objective = Objective::new(survival_id, "Find Survival Kits".to_string(), "Find 3 Survival Kits".to_string(), CollectibleType::SurvivalKit, 3);
+    survival_objective.current_count = 2; // 2/3 completed (equivalent to 2/5)
+    objective_manager.add_objective(survival_objective);
+
+    let book_id = objective_manager.next_id;
+    let mut book_objective = Objective::new(book_id, "Gather Ancient Books".to_string(), "Gather 2 Ancient Books".to_string(), CollectibleType::Book, 2);
+    book_objective.current_count = 1; // 1/2 completed (equivalent to 3/5)
+    objective_manager.add_objective(book_objective);
+
+    let coin_id = objective_manager.next_id;
+    let mut coin_objective = Objective::new(coin_id, "Collect Golden Coins".to_string(), "Collect 10 Golden Coins".to_string(), CollectibleType::Coin, 10);
+    coin_objective.current_count = 8; // 8/10 completed (equivalent to 4/5)
+    objective_manager.add_objective(coin_objective);
+
+    let exploration_id = objective_manager.next_id;
+    let mut exploration_objective = Objective::new(exploration_id, "Explore Ancient Ruins".to_string(), "Visit 3 Ancient Ruins".to_string(), CollectibleType::Book, 3);
+    exploration_objective.current_count = 3; // 3/3 completed (equivalent to 5/5)
+    exploration_objective.completed = true; // Mark as completed
+    objective_manager.add_objective(exploration_objective);
+}
+
+fn update_objective_ui(
+    mut commands: Commands,
+    objective_manager: Res<ObjectiveManager>,
+    font_assets: Option<Res<crate::assets::FontAssets>>,
+    ui_assets: Option<Res<crate::assets::UiAssets>>,
+    _objectives_ui_query: Query<Entity, With<ObjectiveUI>>,
+    objectives_list_query: Query<Entity, (With<Node>, With<Name>)>,
+    existing_slots: Query<Entity, With<ObjectiveSlot>>,
+    _children: Query<&Children>,
+    names: Query<&Name>,
+) {
+    if !objective_manager.is_changed() {
+        return; // Only update when objectives change
+    }
+
+    let Some(font_assets) = font_assets else { return; };
+    let Some(ui_assets) = ui_assets else { return; };
+
+    // Find the objectives list container
+    let mut objectives_list_entity = None;
+    for entity in objectives_list_query.iter() {
+        if let Ok(name) = names.get(entity) {
+            if name.as_str() == "ObjectivesList" {
+                objectives_list_entity = Some(entity);
+                break;
+            }
+        }
+    }
+
+    let Some(list_entity) = objectives_list_entity else {
+        warn!("Could not find ObjectivesList container");
+        return;
+    };
+
+    // Clear existing objective slots
+    for slot_entity in existing_slots.iter() {
+        commands.entity(slot_entity).despawn();
+    }
+
+    // Spawn new objective slots for each objective
+    let font = font_assets.rajdhani_bold.clone();
+    let coin_image = ui_assets.coin.clone(); // Using coin as placeholder for all items
+
+    for objective in &objective_manager.objectives {
+        let slot_entity = commands.spawn(create_objective_slot(objective, font.clone(), coin_image.clone(), ui_assets.green_check_icon.clone())).id();
+        commands.entity(list_entity).add_child(slot_entity);
+    }
+
+    // Add "View More" button after objectives
+    let view_more_entity = commands.spawn(create_view_more_button(font.clone())).id();
+    commands.entity(list_entity).add_child(view_more_entity);
+}
+
+fn create_objective_slot(
+    objective: &Objective,
+    font: Handle<Font>,
+    item_image: Handle<Image>,
+    check_icon: Handle<Image>,
+) -> impl Bundle {
+    let progress_percent = if objective.required_count > 0 {
+        objective.current_count as f32 / objective.required_count as f32
+    } else {
+        1.0
+    };
+
+    (
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Px(136.0),
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            margin: UiRect::bottom(Val::Px(12.0)),
+            padding: UiRect::all(Val::Px(12.0)),
+            border: UiRect::all(Val::Px(3.0)),
+            ..default()
+        },
+        BackgroundColor(Color::DARKER_GLASS),
+        BorderRadius::all(Val::Px(18.0)),
+        ObjectiveSlot {
+            // Removed unused objective_id field
+        },
+        children![
+            // Item Icon Container
+            (
+                Node {
+                    width: Val::Px(96.0),
+                    height: Val::Px(96.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::right(Val::Px(18.0)),
+                    border: UiRect::all(Val::Px(3.0)),
+                    ..default()
+                },
+                BackgroundColor(Color::LIGHT_GLASS),
+                BorderRadius::all(Val::Px(12.0)),
+                                children![
+                    // Item icon (always visible)
+                    (
+                        Node {
+                            width: Val::Px(72.0),
+                            height: Val::Px(72.0),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                        BackgroundColor(Color::NONE),
+                        BorderRadius::all(Val::Px(9.0)),
+                        Name::new("ItemIcon"),
+                        children![(
+                            ImageNode {
+                                image: item_image,
+                                ..Default::default()
+                            },
+                            Node {
+                                width: Val::Px(72.0),
+                                height: Val::Px(72.0),
+                                ..default()
+                            },
+                        )]
+                    ),
+                    // Small green checkmark at bottom right for completed objectives
+                    (
+                        Node {
+                            position_type: PositionType::Absolute,
+                            right: Val::Px(-8.0),
+                            bottom: Val::Px(-8.0),
+                            width: Val::Px(32.0),
+                            height: Val::Px(32.0),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            display: if objective.completed { Display::Flex } else { Display::None },
+                            border: UiRect::all(Val::Px(2.0)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::SUCCESS_GREEN),
+                        BorderColor(Color::SUCCESS_GREEN),
+                        BorderRadius::MAX,
+                        Name::new("CompletionCheckmark"),
+                        children![(
+                            ImageNode {
+                                image: check_icon,
+                                ..Default::default()
+                            },
+                            Node {
+                                width: Val::Px(20.0),
+                                height: Val::Px(20.0),
+                                ..default()
+                            },
+                        )]
+                    )
+                ]
+            ),
+            // Objective Info Container
+            (
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    justify_content: JustifyContent::SpaceBetween,
+                    width: Val::Px(300.0),
+                    height: Val::Px(96.0),
+                    ..default()
+                },
+                children![
+                    // Objective Title
+                    (
+                        Text::new(&objective.title),
+                        TextFont {
+                            font: font.clone(),
+                            font_size: 21.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                        Node {
+                            margin: UiRect::bottom(Val::Px(6.0)),
+                            ..default()
+                        },
+                    ),
+                    // Objective Description
+                    (
+                        Text::new(&objective.description),
+                        TextFont {
+                            font: font.clone(),
+                            font_size: 18.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                        Node {
+                            margin: UiRect::bottom(Val::Px(6.0)),
+                            ..default()
+                        },
+                    ),
+                    // Progress Text
+                    (
+                        Text::new(format!("{}/{}", objective.current_count, objective.required_count)),
+                        TextFont {
+                            font: font.clone(),
+                            font_size: 18.0,
+                            ..default()
+                        },
+                        TextColor(Color::ELYSIUM_GOLD),
+                        Node {
+                            margin: UiRect::bottom(Val::Px(6.0)),
+                            ..default()
+                        },
+                    ),
+                    // Progress Bar
+                    (
+                        Node {
+                            width: Val::Px(270.0),
+                            height: Val::Px(12.0),
+                            border: UiRect::all(Val::Px(1.5)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::DARKER_GLASS),
+                        BorderColor(Color::ELYSIUM_GOLD.with_alpha(0.4)),
+                        BorderRadius::all(Val::Px(6.0)),
+                        children![
+                            (
+                                Node {
+                                    width: Val::Px(267.0 * progress_percent),
+                                    height: Val::Px(9.0),
+                                    margin: UiRect::all(Val::Px(1.5)),
+                                    ..default()
+                                },
+                                BackgroundColor(Color::ELYSIUM_GOLD),
+                                BorderRadius::all(Val::Px(4.5)),
+                            )
+                        ]
+                    )
+                ]
+            )
+        ],
+    )
+}
+
+fn create_view_more_button(font: Handle<Font>) -> impl Bundle {
+    (
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Px(32.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            margin: UiRect::top(Val::Px(12.0)),
+            ..default()
+        },
+        Name::new("View More Button"),
+        Interaction::None,
+        children![(
+            Text::new("VIEW MORE"),
+            TextFont {
+                font,
+                font_size: 20.0,
+                ..default()
+            },
+            TextColor(Color::ELYSIUM_GOLD),
+        )]
+    )
+}
+
+ 

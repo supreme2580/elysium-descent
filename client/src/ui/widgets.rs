@@ -4,14 +4,14 @@ use bevy::ecs::system::IntoObserverSystem;
 use bevy::prelude::*;
 
 pub fn label_widget(
-    window_height: f32,
+    font_size: f32,
     font: Handle<Font>,
     text: impl Into<String> + Clone,
 ) -> impl Bundle {
     (
         Node {
             width: Val::Percent(100.0),
-            height: Val::Percent(20.0),
+            height: Val::Auto, // Auto height to fit content
             justify_content: JustifyContent::Center,
             align_items: AlignItems::Center,
             ..default()
@@ -21,11 +21,11 @@ pub fn label_widget(
         children![(
             Text::new(text.into()),
             TextFont {
-                font_size: window_height * 0.04,
+                font_size,
                 font,
                 ..default()
             },
-            TextColor::WHITE,
+            TextColor(Color::srgb(1.0, 1.0, 1.0)), // Bright white for maximum visibility
         )],
     )
 }
@@ -121,7 +121,7 @@ where
             Pickable::IGNORE,
         ))
         .with_children(|content| {
-            content.spawn(label_widget(window_height, font.clone(), text));
+            content.spawn(label_widget(window_height * 0.04, font.clone(), text));
 
             content
                 .spawn(button_widget(window_height, font.clone(), "-"))
@@ -165,167 +165,243 @@ pub fn player_hud_widget(
 ) -> impl Bundle {
     let health_percent = health.0 as f32 / health.1 as f32;
     let xp_percent = xp.0 as f32 / xp.1 as f32;
-    let (left, right) = match position {
-        HudPosition::Left => (Val::Px(48.0), Val::Auto),
-        HudPosition::Right => (Val::Auto, Val::Px(-64.0)),
+    let (left, right, flex_direction) = match position {
+        HudPosition::Left => (Val::Px(32.0), Val::Auto, FlexDirection::Row),
+        HudPosition::Right => (Val::Auto, Val::Px(32.0), FlexDirection::RowReverse),
     };
+    
     (
         Node {
             position_type: PositionType::Absolute,
             left,
             right,
-            top: Val::Px(24.0),
-            width: Val::Px(400.0),
-            height: Val::Px(100.0),
+            top: Val::Px(32.0),
+            width: Val::Px(630.0),
+            height: Val::Px(180.0),
+            flex_direction,
             justify_content: JustifyContent::FlexStart,
             align_items: AlignItems::Center,
+            padding: UiRect::all(Val::Px(24.0)),
+            border: UiRect::all(Val::Px(3.0)),
             ..default()
         },
-        Name::new("Player HUD"),
+        BackgroundColor(Color::DARK_GLASS),
+        BorderColor(Color::ELYSIUM_GOLD.with_alpha(0.6)),
+        BorderRadius::all(Val::Px(24.0)),
+        Name::new("Modern Player HUD"),
         children![
-            // Avatar and Level
+            // Avatar Container with Glow Effect
             (
                 Node {
-                    width: Val::Px(64.0),
-                    height: Val::Px(64.0),
-                    margin: UiRect::all(Val::Px(4.0)),
+                    width: Val::Px(120.0),
+                    height: Val::Px(120.0),
+                    margin: UiRect::all(Val::Px(12.0)),
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
+                    border: UiRect::all(Val::Px(4.5)),
                     ..default()
                 },
+                BorderColor(Color::ELYSIUM_GOLD.with_alpha(0.8)),
+                BorderRadius::all(Val::Px(63.0)),
+                BackgroundColor(Color::DARKER_GLASS),
                 children![
+                    // Avatar Image
                     (
                         ImageNode {
                             image: avatar.clone(),
                             ..Default::default()
                         },
-                        BorderRadius::all(Val::Px(32.0)),
+                        Node {
+                            width: Val::Px(105.0),
+                            height: Val::Px(105.0),
+                            ..default()
+                        },
+                        BorderRadius::all(Val::Px(52.5)),
                     ),
+                    // Level Badge
                     (
                         Node {
                             position_type: PositionType::Absolute,
-                            left: Val::Px(-10.0),
-                            bottom: Val::Px(-10.0),
-                            width: Val::Px(32.0),
-                            height: Val::Px(32.0),
+                            right: Val::Px(-12.0),
+                            bottom: Val::Px(-12.0),
+                            width: Val::Px(54.0),
+                            height: Val::Px(54.0),
                             justify_content: JustifyContent::Center,
                             align_items: AlignItems::Center,
+                            border: UiRect::all(Val::Px(3.0)),
                             ..default()
                         },
-                        BackgroundColor(Color::BLACK),
+                        BackgroundColor(Color::ELYSIUM_GOLD),
+                        BorderColor(Color::ELYSIUM_GOLD_DIM),
                         BorderRadius::MAX,
                         children![(
                             Text::new(level.to_string()),
                             TextFont {
                                 font: font.clone(),
-                                font_size: 18.0,
+                                font_size: 24.0,
                                 ..default()
                             },
-                            TextColor::WHITE,
+                            TextColor(Color::srgb(0.1, 0.1, 0.1)),
                         )]
                     )
                 ]
             ),
-            // Name and Bars
+            // Stats Container
             (
                 Node {
-                    width: Val::Px(320.0),
-                    height: Val::Px(80.0),
+                    width: Val::Px(450.0),
+                    height: Val::Px(110.0),
                     flex_direction: FlexDirection::Column,
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::FlexStart,
-                    margin: UiRect::left(Val::Px(20.0)),
+                    justify_content: JustifyContent::FlexStart,
+                    margin: UiRect::horizontal(Val::Px(18.0)),
                     ..default()
                 },
                 children![
-                    // Name
+                    // Player Name
                     (
                         Text::new(name),
                         TextFont {
                             font: font.clone(),
-                            font_size: 28.0,
+                            font_size: 33.0,
                             ..default()
                         },
-                        TextColor::WHITE,
+                        TextColor(Color::ELYSIUM_GOLD),
+                        Node {
+                            margin: UiRect::top(Val::Px(-14.0)),
+                            ..default()
+                        },
                     ),
-                    // Health Bar
+                    // Health Bar Container
                     (
                         Node {
-                            width: Val::Px(200.0),
-                            height: Val::Px(24.0),
-                            border: UiRect::all(Val::Px(2.0)),
-                            align_items: AlignItems::Center,
-                            justify_content: JustifyContent::FlexStart,
-                            margin: UiRect::top(Val::Px(8.0)),
+                            width: Val::Px(420.0),
+                            height: Val::Px(39.0),
+                            flex_direction: FlexDirection::Column,
+                            margin: UiRect::bottom(Val::Px(6.0)),
                             ..default()
                         },
-                        BackgroundColor(Color::srgb(0.2, 0.2, 0.2)),
                         children![
+                            // Health Label Row
                             (
                                 Node {
-                                    width: Val::Px(200.0 * health_percent),
-                                    height: Val::Px(24.0),
-                                    ..default()
-                                },
-                                BackgroundColor(Color::srgb(0.2, 0.8, 0.2)), // green
-                            ),
-                            (
-                                Node {
-                                    position_type: PositionType::Absolute,
-                                    width: Val::Px(200.0),
-                                    height: Val::Px(24.0),
-                                    justify_content: JustifyContent::Center,
+                                    width: Val::Percent(100.0),
+                                    flex_direction: FlexDirection::Row,
+                                    justify_content: JustifyContent::SpaceBetween,
                                     align_items: AlignItems::Center,
+                                    margin: UiRect::bottom(Val::Px(3.0)),
                                     ..default()
                                 },
-                                children![(
-                                    Text::new(format!("{}/{}", health.0, health.1)),
-                                    TextFont {
-                                        font: font.clone(),
-                                        font_size: 16.0,
-                                        ..default()
-                                    },
-                                    TextColor::WHITE,
-                                )]
+                                children![
+                                    (
+                                        Text::new("HEALTH"),
+                                        TextFont {
+                                            font: font.clone(),
+                                            font_size: 16.5,
+                                            ..default()
+                                        },
+                                        TextColor(Color::HEALTH_GREEN),
+                                    ),
+                                    (
+                                        Text::new(format!("{}/{}", health.0, health.1)),
+                                        TextFont {
+                                            font: font.clone(),
+                                            font_size: 16.5,
+                                            ..default()
+                                        },
+                                        TextColor::WHITE,
+                                    )
+                                ]
+                            ),
+                            // Health Bar
+                            (
+                                Node {
+                                    width: Val::Px(420.0),
+                                    height: Val::Px(21.0),
+                                    border: UiRect::all(Val::Px(1.5)),
+                                    ..default()
+                                },
+                                BackgroundColor(Color::DARKER_GLASS),
+                                BorderColor(Color::HEALTH_GREEN_DARK.with_alpha(0.6)),
+                                BorderRadius::all(Val::Px(10.5)),
+                                children![
+                                    (
+                                        Node {
+                                            width: Val::Px(417.0 * health_percent),
+                                            height: Val::Px(18.0),
+                                            margin: UiRect::all(Val::Px(1.5)),
+                                            ..default()
+                                        },
+                                        BackgroundColor(Color::HEALTH_GREEN),
+                                        BorderRadius::all(Val::Px(9.0)),
+                                    )
+                                ]
                             )
                         ]
                     ),
-                    // XP Bar
+                    // XP Bar Container
                     (
                         Node {
-                            width: Val::Px(200.0),
-                            height: Val::Px(16.0),
-                            margin: UiRect::top(Val::Px(4.0)),
+                            width: Val::Px(420.0),
+                            height: Val::Px(33.0),
+                            flex_direction: FlexDirection::Column,
+                            margin: UiRect::bottom(Val::Px(0.0)),
                             ..default()
                         },
-                        BackgroundColor(Color::srgb(0.1, 0.1, 0.1)), // dark gray
                         children![
+                            // XP Label Row
                             (
                                 Node {
-                                    width: Val::Px(200.0 * xp_percent),
-                                    height: Val::Px(16.0),
-                                    ..default()
-                                },
-                                BackgroundColor(Color::srgb(0.6, 0.2, 0.7)), // purple
-                            ),
-                            (
-                                Node {
-                                    position_type: PositionType::Absolute,
-                                    width: Val::Px(200.0),
-                                    height: Val::Px(16.0),
-                                    justify_content: JustifyContent::Center,
+                                    width: Val::Percent(100.0),
+                                    flex_direction: FlexDirection::Row,
+                                    justify_content: JustifyContent::SpaceBetween,
                                     align_items: AlignItems::Center,
+                                    margin: UiRect::top(Val::Px(14.0)),
                                     ..default()
                                 },
-                                children![(
-                                    Text::new("LEVEL UP"),
-                                    TextFont {
-                                        font: font.clone(),
-                                        font_size: 12.0,
-                                        ..default()
-                                    },
-                                    TextColor::WHITE,
-                                )]
+                                children![
+                                    (
+                                        Text::new("EXPERIENCE"),
+                                        TextFont {
+                                            font: font.clone(),
+                                            font_size: 13.5,
+                                            ..default()
+                                        },
+                                        TextColor(Color::XP_PURPLE),
+                                    ),
+                                    (
+                                        Text::new(format!("{}/{}", xp.0, xp.1)),
+                                        TextFont {
+                                            font: font.clone(),
+                                            font_size: 13.5,
+                                            ..default()
+                                        },
+                                        TextColor::WHITE,
+                                    )
+                                ]
+                            ),
+                            // XP Bar
+                            (
+                                Node {
+                                    width: Val::Px(420.0),
+                                    height: Val::Px(21.0),
+                                    border: UiRect::all(Val::Px(1.5)),
+                                    ..default()
+                                },
+                                BackgroundColor(Color::DARKER_GLASS),
+                                BorderColor(Color::XP_PURPLE_DARK.with_alpha(0.6)),
+                                BorderRadius::all(Val::Px(10.5)),
+                                children![
+                                    (
+                                        Node {
+                                            width: Val::Px(417.0 * xp_percent),
+                                            height: Val::Px(18.0),
+                                            margin: UiRect::all(Val::Px(1.5)),
+                                            ..default()
+                                        },
+                                        BackgroundColor(Color::XP_PURPLE),
+                                        BorderRadius::all(Val::Px(9.0)),
+                                    )
+                                ]
                             )
                         ]
                     )

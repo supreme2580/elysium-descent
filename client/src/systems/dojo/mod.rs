@@ -11,12 +11,17 @@ pub use pickup_item::PickupItemEvent;
 /// Resource to track overall Dojo system state
 #[derive(Resource, Debug, Default)]
 pub struct DojoSystemState {
+    #[allow(dead_code)]
     pub torii_connected: bool,
+    #[allow(dead_code)]
     pub account_connected: bool,
+    #[allow(dead_code)]
     pub last_error: Option<String>,
+    #[allow(dead_code)]
     pub config: DojoConfig,
 }
 
+#[allow(dead_code)]
 pub fn plugin(app: &mut App) {
     app.init_resource::<DojoSystemState>()
         .add_systems(Startup, (setup_dojo_config, handle_dojo_setup).chain())
@@ -27,6 +32,7 @@ pub fn plugin(app: &mut App) {
         .add_plugins((create_game::plugin, pickup_item::plugin));
 }
 
+#[allow(dead_code)]
 fn setup_dojo_config(mut dojo_state: ResMut<DojoSystemState>) {
     dojo_state.config = DojoConfig::default();
     info!("Dojo configuration loaded: {:?}", dojo_state.config);
@@ -38,6 +44,7 @@ fn setup_dojo_config(mut dojo_state: ResMut<DojoSystemState>) {
     }
 }
 
+#[allow(dead_code)]
 fn handle_dojo_setup(
     tokio: Res<TokioRuntime>,
     mut dojo: ResMut<DojoResource>,
@@ -84,6 +91,7 @@ fn handle_dojo_setup(
 }
 
 /// System to log Dojo status changes for user feedback
+#[allow(dead_code)]
 fn log_dojo_status(dojo_state: Res<DojoSystemState>) {
     if let Some(error) = &dojo_state.last_error {
         error!("❌ Dojo Error: {}", error);
