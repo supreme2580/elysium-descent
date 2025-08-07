@@ -3,6 +3,7 @@ use bevy::{prelude::*, render::view::RenderLayers};
 use bevy_kira_audio::prelude::*;
 use bevy_lunex::prelude::*;
 use dojo_bevy_plugin::{DojoResource, TokioRuntime};
+// Removed unused import - PhysicsDebugPlugin is currently disabled
 
 mod constants;
 mod game;
@@ -37,6 +38,7 @@ fn main() -> AppExit {
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1))) // Dark background initially
         .add_plugins(UiLunexPlugins)
         .add_plugins(AudioPlugin)
+        // .add_plugins(PhysicsDebugPlugin::default()) // Temporarily disabled for performance
         .init_resource::<DojoResource>()
         .init_resource::<TokioRuntime>()
         // .add_plugins(DojoPlugin) // Temporarily disabled for testing

@@ -108,8 +108,8 @@ pub struct ModelAssets {
     #[asset(path = "models/dungeon.glb#Scene0")]
     pub dungeon: Handle<Scene>,
 
-    #[asset(path = "models/enemy.glb#Scene0")]
-    pub enemy: Handle<Scene>,
+    #[asset(path = "models/enemy.glb")]
+    pub enemy: Handle<Gltf>,
 
     #[asset(path = "models/book.glb#Scene0")]
     pub book: Handle<Scene>,

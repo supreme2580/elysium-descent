@@ -1,8 +1,9 @@
 use super::{Screen, despawn_scene};
 use crate::assets::ModelAssets;
 use crate::systems::character_controller::CharacterControllerBundle;
+use crate::systems::enemy_ai::{EnemyBundle, EnemyAIPlugin};
 use avian3d::prelude::{
-    Collider, ColliderConstructor, ColliderConstructorHierarchy, Friction, GravityScale,
+    ColliderConstructor, ColliderConstructorHierarchy, Friction, GravityScale,
     Restitution, RigidBody, CollisionEventsEnabled,
 };
 use bevy::prelude::*;
@@ -12,7 +13,7 @@ use bevy_gltf_animation::prelude::GltfSceneRoot;
 // ===== PLUGIN SETUP =====
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(Screen::FightScene), spawn_fight_scene)
+    app.add_systems(OnEnter(Screen::FightScene), (spawn_fight_scene, despawn_collectibles))
         .add_systems(OnExit(Screen::FightScene), despawn_scene::<FightScene>)
         .add_systems(
             Update,
@@ -21,7 +22,8 @@ pub(super) fn plugin(app: &mut App) {
         .add_systems(
             Update,
             camera_follow_fight_player.run_if(in_state(Screen::FightScene)),
-        );
+        )
+        .add_plugins(EnemyAIPlugin);
 }
 
 // ===== SYSTEMS =====
@@ -90,20 +92,23 @@ fn spawn_fight_scene(
         ))
         .observe(crate::systems::character_controller::setup_idle_animation);
 
-    // Spawn the enemy model at the opposite end (unchanged)
+    // Spawn the enemy model with AI and animations
     commands.spawn((
         Name::new("Fight Enemy"),
-        SceneRoot(assets.enemy.clone()),
+        GltfSceneRoot::new(assets.enemy.clone()),
         Transform {
             translation: Vec3::new(5.0, -1.65, 0.0),
             rotation: Quat::from_rotation_y(std::f32::consts::PI),
             scale: Vec3::splat(4.0),
             ..default()
         },
-        Collider::capsule(0.5, 1.5),
-        RigidBody::Static,
+        EnemyBundle::default(),
+        Friction::new(0.5),
+        Restitution::new(0.0),
+        GravityScale(1.0),
+        CollisionEventsEnabled, // Enable collision events
         FightScene,
-    ));
+    )).observe(crate::systems::character_controller::setup_idle_animation);
 
     // Add a camera (match gameplay)
     commands.spawn((
@@ -151,7 +156,7 @@ fn spawn_fight_scene(
                 crate::ui::widgets::HudPosition::Right,
             ));
             parent.spawn((
-                Text::new("FIGHT SCENE\nPress ESC to return to gameplay"),
+                Text::new("FIGHT SCENE\nPress ESC to return to gameplay\nPress COMMA from gameplay to enter fight"),
                 TextFont {
                     font_size: 40.0,
                     ..default()
@@ -207,6 +212,12 @@ fn camera_follow_fight_player(
             // Make camera look at player
             camera_transform.look_at(player_pos + Vec3::Y * 2.0, Vec3::Y);
         }
+    }
+}
+
+fn despawn_collectibles(mut commands: Commands, query: Query<Entity, With<crate::systems::collectibles::Collectible>>) {
+    for entity in &query {
+        commands.entity(entity).despawn();
     }
 }
 

@@ -105,9 +105,16 @@ fn movement(
         &mut AnimationState,
     )>,
     mut jump_cooldown: ResMut<JumpCooldown>,
+    keyboard: Res<ButtonInput<KeyCode>>,
 ) {
     let delta_time = time.delta_secs();
     jump_cooldown.last_jump_time += delta_time;
+
+    // Check if any movement keys are pressed
+    let is_movement_pressed = keyboard.any_pressed([
+        KeyCode::KeyW, KeyCode::KeyA, KeyCode::KeyS, KeyCode::KeyD,
+        KeyCode::ArrowUp, KeyCode::ArrowDown, KeyCode::ArrowLeft, KeyCode::ArrowRight,
+    ]);
 
     for event in movement_event_reader.read() {
         for (jump_impulse, mut linear_velocity, mut transform, mut animation_state) in
@@ -179,13 +186,39 @@ fn movement(
             }
         }
     }
+
+    // If no movement keys are pressed, immediately stop movement
+    if !is_movement_pressed {
+        for (_, mut linear_velocity, _, mut animation_state) in &mut controllers {
+            // Immediately stop horizontal movement
+            linear_velocity.x = 0.0;
+            linear_velocity.z = 0.0;
+            
+            // Reset animation state for immediate idle
+            animation_state.forward_hold_time = 0.0;
+        }
+    }
 }
 
 /// Applies movement damping and prevents unwanted climbing
 fn apply_movement_damping(
     mut query: Query<(&mut LinearVelocity, &AnimationState, &Transform), With<CharacterController>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
 ) {
+    // Check if any movement keys are pressed
+    let is_movement_pressed = keyboard.any_pressed([
+        KeyCode::KeyW, KeyCode::KeyA, KeyCode::KeyS, KeyCode::KeyD,
+        KeyCode::ArrowUp, KeyCode::ArrowDown, KeyCode::ArrowLeft, KeyCode::ArrowRight,
+    ]);
+
     for (mut linear_velocity, animation_state, _transform) in &mut query {
+        // If no movement keys are pressed, immediately stop horizontal movement
+        if !is_movement_pressed {
+            linear_velocity.x = 0.0;
+            linear_velocity.z = 0.0;
+            continue;
+        }
+
         // Check for unwanted climbing behavior
         let horizontal_speed = Vec2::new(linear_velocity.x, linear_velocity.z).length();
         let is_moving_horizontally = horizontal_speed > 0.1;
@@ -233,9 +266,16 @@ pub struct AnimationState {
 
 /// Updates animations based on character movement
 fn update_animations(
-    mut query: Query<(&LinearVelocity, &mut GltfAnimations, &mut AnimationState)>,
+    mut query: Query<(&LinearVelocity, &mut GltfAnimations, &mut AnimationState), Without<crate::systems::enemy_ai::Enemy>>,
     mut animation_players: Query<&mut AnimationPlayer>,
+    keyboard: Res<ButtonInput<KeyCode>>,
 ) {
+    // Check if any movement keys are pressed
+    let is_movement_pressed = keyboard.any_pressed([
+        KeyCode::KeyW, KeyCode::KeyA, KeyCode::KeyS, KeyCode::KeyD,
+        KeyCode::ArrowUp, KeyCode::ArrowDown, KeyCode::ArrowLeft, KeyCode::ArrowRight,
+    ]);
+
     for (velocity, mut animations, mut animation_state) in &mut query {
         let horizontal_velocity = Vec2::new(velocity.x, velocity.z);
         let is_moving = horizontal_velocity.length() > 0.1;
@@ -276,9 +316,9 @@ fn update_animations(
                 }
             }
         } else {
-            // Normal movement animations
-            let target_animation = if !is_moving {
-                3 // Idle
+            // Normal movement animations - prioritize input over velocity for immediate response
+            let target_animation = if !is_movement_pressed || !is_moving {
+                3 // Idle - immediately when no input or no movement
             } else if animation_state.forward_hold_time >= 3.0 {
                 4 // Running
             } else {
