@@ -127,7 +127,10 @@ fn jump(
 
 fn sprint_started(
     _trigger: Trigger<Started<Sprint>>,
-    mut animation_query: Query<&mut crate::systems::character_controller::AnimationState>,
+    mut animation_query: Query<
+        &mut crate::systems::character_controller::AnimationState,
+        With<crate::systems::character_controller::CharacterController>,
+    >,
 ) {
     if let Ok(mut animation_state) = animation_query.single_mut() {
         // Set sprint animation
@@ -137,7 +140,10 @@ fn sprint_started(
 
 fn sprint_completed(
     _trigger: Trigger<Completed<Sprint>>,
-    mut animation_query: Query<&mut crate::systems::character_controller::AnimationState>,
+    mut animation_query: Query<
+        &mut crate::systems::character_controller::AnimationState,
+        With<crate::systems::character_controller::CharacterController>,
+    >,
 ) {
     if let Ok(mut animation_state) = animation_query.single_mut() {
         // Reset to normal movement
