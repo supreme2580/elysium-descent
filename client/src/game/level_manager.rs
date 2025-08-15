@@ -88,23 +88,67 @@ impl LevelManager {
     }
 
     pub fn load_levels(&mut self) {
+        // Try multiple possible paths for the level files
+        let possible_paths = [
+            "src/levels/level_1.json",
+            "levels/level_1.json",
+            "client/src/levels/level_1.json",
+            "../client/src/levels/level_1.json",
+        ];
+
         // Load level 1
-        if let Ok(level_1_data) = std::fs::read_to_string("client/src/levels/level_1.json") {
-            if let Ok(level_data) = serde_json::from_str::<LevelData>(&level_1_data) {
-                self.levels.insert(1, level_data);
+        let mut level_1_loaded = false;
+        for path in &possible_paths {
+            if let Ok(level_1_data) = std::fs::read_to_string(path) {
+                if let Ok(level_data) = serde_json::from_str::<LevelData>(&level_1_data) {
+                    info!("✅ Successfully loaded Level 1 from {}: {}", path, level_data.level_name);
+                    self.levels.insert(1, level_data);
+                    level_1_loaded = true;
+                    break;
+                } else {
+                    warn!("❌ Failed to parse Level 1 JSON from {}", path);
+                }
             }
+        }
+        
+        if !level_1_loaded {
+            warn!("❌ Failed to read Level 1 file from any of the attempted paths");
         }
 
         // Load level 2
-        if let Ok(level_2_data) = std::fs::read_to_string("client/src/levels/level_2.json") {
-            if let Ok(level_data) = serde_json::from_str::<LevelData>(&level_2_data) {
-                self.levels.insert(2, level_data);
+        let mut level_2_loaded = false;
+        for path in &possible_paths {
+            if let Ok(level_2_data) = std::fs::read_to_string(path) {
+                if let Ok(level_data) = serde_json::from_str::<LevelData>(&level_2_data) {
+                    info!("✅ Successfully loaded Level 2 from {}: {}", path, level_data.level_name);
+                    self.levels.insert(2, level_data);
+                    level_2_loaded = true;
+                    break;
+                } else {
+                    warn!("❌ Failed to parse Level 2 JSON from {}", path);
+                }
             }
         }
+        
+        if !level_2_loaded {
+            warn!("❌ Failed to read Level 2 file from any of the attempted paths");
+        }
+
+        info!("📊 Loaded {} levels, starting at level {}", self.levels.len(), self.current_level);
     }
 
     pub fn get_current_level(&self) -> &LevelData {
-        self.levels.get(&self.current_level).unwrap_or(&self.default_level)
+        let level = self.levels.get(&self.current_level);
+        match level {
+            Some(level_data) => {
+                info!("🎮 Using loaded level {}: {}", level_data.level_id, level_data.level_name);
+                level_data
+            },
+            None => {
+                warn!("⚠️ Level {} not found, falling back to default level", self.current_level);
+                &self.default_level
+            }
+        }
     }
 
     pub fn advance_level(&mut self) -> bool {
@@ -206,7 +250,7 @@ impl Plugin for LevelManagerPlugin {
             .add_event::<LevelCompletedEvent>()
             .add_event::<LevelStartedEvent>()
             .add_systems(Startup, setup_level_manager)
-            .add_systems(Update, handle_level_progression);
+            .add_systems(Update, (handle_level_progression, debug_level_manager_state));
     }
 }
 
@@ -232,6 +276,28 @@ fn handle_level_progression(
                 level_id: level_manager.current_level,
                 level_data: current_level_data,
             });
+        }
+    }
+}
+
+fn debug_level_manager_state(
+    level_manager: Res<LevelManager>,
+    time: Res<Time>,
+) {
+    // Only log every 5 seconds to avoid spam
+    if (time.elapsed_secs() as u32) % 5 == 0 {
+        info!("🔍 Level Manager Debug - Current Level: {}, Levels Loaded: {}, Level Completed: {}", 
+              level_manager.current_level, 
+              level_manager.levels.len(), 
+              level_manager.level_completed);
+        
+        if let Some(current_level) = level_manager.levels.get(&level_manager.current_level) {
+            info!("   Current Level Data: {} ({} objectives)", 
+                  current_level.level_name, 
+                  current_level.objectives.len());
+        } else {
+            info!("   Using Default Level ({} objectives)", 
+                  level_manager.default_level.objectives.len());
         }
     }
 }

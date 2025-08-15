@@ -101,16 +101,23 @@ pub struct ObjectiveManager {
 
 impl ObjectiveManager {
     pub fn add_objective(&mut self, objective: Objective) {
+        info!("➕ Adding objective: {} ({} objectives total)", objective.title, self.total_level_objectives + 1);
         self.objectives.push(objective);
         self.total_level_objectives += 1;
     }
 
     pub fn update_progress(&mut self, target: &str, amount: u32) {
+        info!("📈 Updating progress for target '{}' by {}", target, amount);
         for objective in &mut self.objectives {
             if objective.target == target && !objective.completed {
+                let old_count = objective.current_count;
                 objective.add_progress(amount);
+                info!("   Objective '{}': {} -> {} (required: {:?})", 
+                      objective.title, old_count, objective.current_count, objective.required_count);
                 if objective.completed {
                     self.level_objectives_completed += 1;
+                    info!("   ✅ Objective '{}' completed! ({}/{})", 
+                          objective.title, self.level_objectives_completed, self.total_level_objectives);
                 }
             }
         }
@@ -121,10 +128,15 @@ impl ObjectiveManager {
     }
 
     pub fn are_all_completed(&self) -> bool {
-        self.level_objectives_completed >= self.total_level_objectives && self.total_level_objectives > 0
+        let completed = self.level_objectives_completed >= self.total_level_objectives && self.total_level_objectives > 0;
+        if completed {
+            info!("🎉 All objectives completed! ({}/{})", self.level_objectives_completed, self.total_level_objectives);
+        }
+        completed
     }
 
     pub fn clear_objectives(&mut self) {
+        info!("🗑️ Clearing {} objectives", self.objectives.len());
         self.objectives.clear();
         self.level_objectives_completed = 0;
         self.total_level_objectives = 0;
@@ -141,7 +153,7 @@ impl Plugin for ObjectivesPlugin {
             .add_systems(OnEnter(Screen::GamePlay), setup_initial_objectives)
             .add_systems(
                 Update,
-                (update_objective_ui, check_level_completion).run_if(in_state(Screen::GamePlay)),
+                (update_objective_ui, check_level_completion, force_objectives_update).run_if(in_state(Screen::GamePlay)),
             )
             .add_systems(OnExit(Screen::GamePlay), clear_objectives_on_exit);
     }
@@ -151,18 +163,38 @@ impl Plugin for ObjectivesPlugin {
 
 fn setup_initial_objectives(
     mut objective_manager: ResMut<ObjectiveManager>,
-    level_manager: Res<LevelManager>,
+    level_manager: Option<Res<LevelManager>>,
 ) {
     // Clear any existing objectives
     objective_manager.clear_objectives();
 
+    // Check if level manager is available
+    let level_manager = match level_manager {
+        Some(lm) => lm,
+        None => {
+            warn!("⚠️ LevelManager not available during objectives setup");
+            return;
+        }
+    };
+
     // Get objectives from current level
     let current_level = level_manager.get_current_level();
     
-    for level_objective in &current_level.objectives {
+    info!("🎯 Setting up objectives for level {}: {}", current_level.level_id, current_level.level_name);
+    info!("📋 Found {} objectives in level data", current_level.objectives.len());
+    
+    if current_level.objectives.is_empty() {
+        warn!("⚠️ No objectives found in level data!");
+        return;
+    }
+    
+    for (i, level_objective) in current_level.objectives.iter().enumerate() {
         let objective = Objective::from_level_data(level_objective);
+        info!("   Objective {}: {} - {}", i + 1, objective.title, objective.description);
         objective_manager.add_objective(objective);
     }
+    
+    info!("✅ Added {} objectives to objective manager", objective_manager.total_level_objectives);
 }
 
 fn check_level_completion(
@@ -199,6 +231,8 @@ fn update_objective_ui(
     let Some(font_assets) = font_assets else { return; };
     let Some(ui_assets) = ui_assets else { return; };
 
+    info!("🔄 Updating objectives UI with {} objectives", objective_manager.objectives.len());
+
     // Find the objectives list container
     let mut objectives_list_entity = None;
     for entity in objectives_list_query.iter() {
@@ -224,7 +258,8 @@ fn update_objective_ui(
     let font = font_assets.rajdhani_bold.clone();
     let coin_image = ui_assets.coin.clone(); // Using coin as placeholder for all items
 
-    for objective in &objective_manager.objectives {
+    for (i, objective) in objective_manager.objectives.iter().enumerate() {
+        info!("   Rendering objective {}: {}", i + 1, objective.title);
         let slot_entity = commands.spawn(create_objective_slot(objective, font.clone(), coin_image.clone(), ui_assets.green_check_icon.clone())).id();
         commands.entity(list_entity).add_child(slot_entity);
     }
@@ -232,6 +267,8 @@ fn update_objective_ui(
     // Add "View More" button after objectives
     let view_more_entity = commands.spawn(create_view_more_button(font.clone())).id();
     commands.entity(list_entity).add_child(view_more_entity);
+    
+    info!("✅ Objectives UI updated with {} objective slots", objective_manager.objectives.len());
 }
 
 fn create_objective_slot(
@@ -437,6 +474,25 @@ fn create_view_more_button(font: Handle<Font>) -> impl Bundle {
             TextColor(Color::ELYSIUM_GOLD),
         )]
     )
+}
+
+fn force_objectives_update(
+    level_manager: Res<LevelManager>,
+    mut objective_manager: ResMut<ObjectiveManager>,
+) {
+    // If level manager has changed and we have no objectives, force a refresh
+    if level_manager.is_changed() && objective_manager.objectives.is_empty() {
+        info!("🔄 Level manager changed, forcing objectives refresh");
+        // Clear and reload objectives
+        objective_manager.clear_objectives();
+        let current_level = level_manager.get_current_level();
+        
+        for (i, level_objective) in current_level.objectives.iter().enumerate() {
+            let objective = Objective::from_level_data(level_objective);
+            info!("   Force adding objective {}: {} - {}", i + 1, objective.title, objective.description);
+            objective_manager.add_objective(objective);
+        }
+    }
 }
 
  
