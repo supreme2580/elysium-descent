@@ -13,6 +13,7 @@ use crate::systems::character_controller::{
 };
 use crate::systems::book_interaction::BookInteractionPlugin;
 use crate::systems::collectibles::{CollectiblesPlugin, NavigationBasedSpawner, CollectibleSpawner, CoinStreamingManager};
+use crate::systems::level_manager::LevelManagerPlugin;
 use crate::systems::objectives::ObjectivesPlugin;
 use crate::ui::dialog::DialogPlugin;
 use crate::ui::inventory::spawn_inventory_ui;
@@ -50,6 +51,7 @@ pub(super) fn plugin(app: &mut App) {
     .add_plugins(CharacterControllerPlugin)
     .add_plugins(GltfAnimationPlugin)
     .add_plugins(CollectiblesPlugin)
+    .add_plugins(LevelManagerPlugin)
     .add_plugins(ObjectivesPlugin)
     .add_plugins(DialogPlugin)
     .add_plugins(BookInteractionPlugin);

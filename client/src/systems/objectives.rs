@@ -79,37 +79,9 @@ impl Plugin for ObjectivesPlugin {
 
 // ===== SYSTEMS =====
 
-fn setup_initial_objectives(mut objective_manager: ResMut<ObjectiveManager>) {
-    // Clear any existing objectives
-    objective_manager.objectives.clear();
-    objective_manager.next_id = 0;
-
-    // Add objectives with different completion states (1/5, 2/5, 3/5, 4/5, 5/5)
-    let health_id = objective_manager.next_id;
-    let mut health_objective = Objective::new(health_id, "Collect Health Potions".to_string(), "Collect 5 Health Potions".to_string(), CollectibleType::HealthPotion, 5);
-    health_objective.current_count = 1; // 1/5 completed
-    objective_manager.add_objective(health_objective);
-
-    let survival_id = objective_manager.next_id;
-    let mut survival_objective = Objective::new(survival_id, "Find Survival Kits".to_string(), "Find 3 Survival Kits".to_string(), CollectibleType::SurvivalKit, 3);
-    survival_objective.current_count = 2; // 2/3 completed (equivalent to 2/5)
-    objective_manager.add_objective(survival_objective);
-
-    let book_id = objective_manager.next_id;
-    let mut book_objective = Objective::new(book_id, "Gather Ancient Books".to_string(), "Gather 2 Ancient Books".to_string(), CollectibleType::Book, 2);
-    book_objective.current_count = 1; // 1/2 completed (equivalent to 3/5)
-    objective_manager.add_objective(book_objective);
-
-    let coin_id = objective_manager.next_id;
-    let mut coin_objective = Objective::new(coin_id, "Collect Golden Coins".to_string(), "Collect 10 Golden Coins".to_string(), CollectibleType::Coin, 10);
-    coin_objective.current_count = 8; // 8/10 completed (equivalent to 4/5)
-    objective_manager.add_objective(coin_objective);
-
-    let exploration_id = objective_manager.next_id;
-    let mut exploration_objective = Objective::new(exploration_id, "Explore Ancient Ruins".to_string(), "Visit 3 Ancient Ruins".to_string(), CollectibleType::Book, 3);
-    exploration_objective.current_count = 3; // 3/3 completed (equivalent to 5/5)
-    exploration_objective.completed = true; // Mark as completed
-    objective_manager.add_objective(exploration_objective);
+fn setup_initial_objectives(_objective_manager: ResMut<ObjectiveManager>) {
+    // This function is now handled by the level manager
+    // Objectives are loaded from level JSON files
 }
 
 fn update_objective_ui(

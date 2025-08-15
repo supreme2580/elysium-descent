@@ -4,4 +4,5 @@ pub mod collectibles;
 pub mod collectibles_config;
 pub mod dojo;
 pub mod enemy_ai;
+pub mod level_manager;
 pub mod objectives;
