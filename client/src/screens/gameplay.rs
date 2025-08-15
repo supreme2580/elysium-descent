@@ -19,6 +19,7 @@ use crate::ui::inventory::spawn_inventory_ui;
 use crate::ui::styles::ElysiumDescentColorPalette;
 use crate::ui::widgets::{HudPosition, player_hud_widget};
 use crate::ui::modal::despawn_modal;
+use crate::game::level_manager::{LevelManager, LevelStartedEvent};
 use bevy_enhanced_input::prelude::*;
 
 // ===== PLUGIN SETUP =====
@@ -31,6 +32,7 @@ pub(super) fn plugin(app: &mut App) {
             debug_streaming_manager_state,
             PlayingScene::spawn_player_and_camera,
             set_gameplay_clear_color,
+            setup_level_objectives,
         ),
     )
     .add_systems(
@@ -40,6 +42,7 @@ pub(super) fn plugin(app: &mut App) {
             // Fallback systems that run if preloaded entities weren't found
             fallback_spawn_environment,
             fallback_spawn_collectibles,
+            handle_level_started,
         ).run_if(in_state(Screen::GamePlay)),
     )
     .add_systems(
@@ -493,4 +496,34 @@ fn spawn_fallback_collectible(
         CollisionEventsEnabled, // Enable collision events for this coin
         PlayingScene,
     ));
+}
+
+fn setup_level_objectives(
+    mut commands: Commands,
+    _level_manager: Res<LevelManager>,
+    font_assets: Option<Res<FontAssets>>,
+    ui_assets: Option<Res<UiAssets>>,
+) {
+    if let (Some(font_assets), Some(ui_assets)) = (font_assets, ui_assets) {
+        // Spawn objectives UI for the current level
+        spawn_objectives_ui(&mut commands, &font_assets, &ui_assets);
+    }
+}
+
+fn handle_level_started(
+    mut level_started_events: EventReader<LevelStartedEvent>,
+    _commands: Commands,
+    font_assets: Option<Res<FontAssets>>,
+    ui_assets: Option<Res<UiAssets>>,
+) {
+    for _event in level_started_events.read() {
+        // Check if we have the required assets
+        if font_assets.is_some() && ui_assets.is_some() {
+            // Despawn existing objectives UI
+            // This will be handled by the objectives system
+            
+            // The objectives system will automatically update with new level data
+            info!("Level started, objectives will be updated automatically");
+        }
+    }
 }

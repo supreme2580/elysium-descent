@@ -1,0 +1,70 @@
+{
+  "level_id": 1,
+  "level_name": "The Beginning",
+  "player_type": "Man",
+  "coins": {
+    "spawn_count": 15,
+    "spawn_positions": [
+      {"x": 10.0, "y": 1.0, "z": 5.0},
+      {"x": -8.0, "y": 1.0, "z": 12.0},
+      {"x": 15.0, "y": 1.0, "z": -3.0},
+      {"x": -12.0, "y": 1.0, "z": -8.0},
+      {"x": 20.0, "y": 1.0, "z": 15.0},
+      {"x": -18.0, "y": 1.0, "z": 20.0},
+      {"x": 25.0, "y": 1.0, "z": -10.0},
+      {"x": -25.0, "y": 1.0, "z": -15.0},
+      {"x": 30.0, "y": 1.0, "z": 25.0},
+      {"x": -30.0, "y": 1.0, "z": 30.0},
+      {"x": 35.0, "y": 1.0, "z": -20.0},
+      {"x": -35.0, "y": 1.0, "z": -25.0},
+      {"x": 40.0, "y": 1.0, "z": 35.0},
+      {"x": -40.0, "y": 1.0, "z": 40.0},
+      {"x": 45.0, "y": 1.0, "z": -30.0}
+    ]
+  },
+  "beasts": [
+    {
+      "id": "monster_1",
+      "beast_type": "Monster",
+      "spawn_position": {"x": 0.0, "y": 1.0, "z": 0.0},
+      "health": 100,
+      "damage": 25,
+      "speed": 3.0
+    }
+  ],
+  "objectives": [
+    {
+      "id": "collect_coins",
+      "title": "Collect Ancient Coins",
+      "description": "Collect 5 coins to unlock the path forward",
+      "objective_type": "collect",
+      "target": "coins",
+      "required_count": 5,
+      "reward": "unlock_level_2"
+    },
+    {
+      "id": "find_ancient_book",
+      "title": "Find the Ancient Book",
+      "description": "Locate the ancient book to gain knowledge",
+      "objective_type": "reach_location",
+      "target": "ancient_book",
+      "position": {"x": 50.0, "y": 1.0, "z": 0.0},
+      "completion_radius": 5.0,
+      "reward": "ancient_knowledge"
+    },
+    {
+      "id": "defeat_monster",
+      "title": "Defeat the Guardian",
+      "description": "Defeat the monster to prove your worth",
+      "objective_type": "defeat",
+      "target": "monster_1",
+      "reward": "guardian_essence"
+    }
+  ],
+  "environment": {
+    "dungeon_scale": 7.5,
+    "dungeon_position": {"x": 0.0, "y": -1.5, "z": 0.0},
+    "dungeon_rotation": -1.5708
+  },
+  "next_level": 2
+}

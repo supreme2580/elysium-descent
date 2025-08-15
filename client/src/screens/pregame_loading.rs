@@ -5,8 +5,8 @@ use std::fs;
 
 use super::Screen;
 use crate::assets::{FontAssets, ModelAssets, UiAssets};
-use crate::constants::collectibles::{MAX_COINS, MAX_COIN_PLACEMENT_ATTEMPTS, MIN_DISTANCE_BETWEEN_COINS};
 use crate::systems::collectibles::{CollectibleSpawner, NavigationBasedSpawner, NavigationData, CoinStreamingManager};
+use crate::game::level_manager::LevelManager;
 
 #[derive(Component)]
 struct PreGameLoadingScreen;
@@ -345,82 +345,44 @@ fn load_navigation_system(
 }
 
 fn spawn_collectibles_system(
-    nav_spawner: Res<NavigationBasedSpawner>,
-    mut collectible_spawner: ResMut<CollectibleSpawner>,
-    mut streaming_manager: ResMut<CoinStreamingManager>,
+    _commands: Commands,
     mut loading_progress: ResMut<LoadingProgress>,
-    spatial_query: SpatialQuery,
+    mut streaming_manager: ResMut<CoinStreamingManager>,
+    level_manager: Res<LevelManager>,
     time: Res<Time>,
 ) {
-    if !loading_progress.collectibles_spawned 
-        && loading_progress.should_load_stage(3, time.elapsed_secs()) {
-        if collectible_spawner.coins_spawned == 0 {
-            // Pre-calculate coin positions using navigation data
-
-            
-            if nav_spawner.loaded && !nav_spawner.nav_positions.is_empty() {
-
-            } else {
-
-            }
-            
-            let mut rng = rand::rng();
-            let mut spawned_positions = Vec::new();
-            let mut coins_calculated = 0;
-            let mut attempts = 0;
-
-            while coins_calculated < MAX_COINS && attempts < MAX_COIN_PLACEMENT_ATTEMPTS {
-                attempts += 1;
-
-                // Use navigation positions if available, otherwise generate fallback positions
-                let base_pos = if nav_spawner.loaded && !nav_spawner.nav_positions.is_empty() {
-                    // Use actual navigation data
-                    nav_spawner.nav_positions[rng.random_range(0..nav_spawner.nav_positions.len())]
-                } else {
-                    // Generate fallback positions closer to spawn
-                    Vec3::new(
-                        rng.random_range(-60.0..60.0), // Reasonable range around spawn
-                        2.0, // Above ground for visibility
-                        rng.random_range(-60.0..60.0), // Reasonable range around spawn
-                    )
-                };
-                
-                // Add some randomness around the navigation position
-                let offset_x = rng.random_range(-5.0..5.0);
-                let offset_z = rng.random_range(-5.0..5.0);
-                let coin_pos = Vec3::new(
-                    base_pos.x + offset_x,
-                    base_pos.y.max(1.5), // Ensure above ground
-                    base_pos.z + offset_z,
-                );
-
-                // Check minimum distance from other coins
-                let too_close = spawned_positions.iter().any(|&other_pos: &Vec3| {
-                    coin_pos.distance(other_pos) < MIN_DISTANCE_BETWEEN_COINS
-                });
-
-                if !too_close && is_valid_coin_position_preload(coin_pos, &spatial_query) {
-                    streaming_manager.add_position(coin_pos);
-                    spawned_positions.push(coin_pos);
-                    coins_calculated += 1;
-
-                    // Log progress every 100 coins
-
-                }
-            }
-
-            collectible_spawner.coins_spawned = coins_calculated;
-            loading_progress.collectibles_spawned = true;
-
-            if coins_calculated < MAX_COINS {
-
-            } else {
-
-            }
-            
-
-        }
+    if !loading_progress.should_load_stage(3, time.elapsed_secs()) {
+        return;
     }
+
+    if loading_progress.collectibles_spawned {
+        return;
+    }
+
+    // Get coin positions from current level
+    let current_level = level_manager.get_current_level();
+    
+    // Add coin positions from level data to streaming manager
+    for coin_position in &current_level.coins.spawn_positions {
+        let position = Vec3::new(coin_position.x, coin_position.y, coin_position.z);
+        streaming_manager.add_position(position);
+    }
+
+    // Add some additional random coin positions for variety
+    let mut rng = rand::rng();
+    let additional_coins = 10;
+    
+    for _ in 0..additional_coins {
+        let x = rng.random_range(-50.0..50.0);
+        let z = rng.random_range(-50.0..50.0);
+        let y = 1.0; // Keep coins at ground level
+        
+        let position = Vec3::new(x, y, z);
+        streaming_manager.add_position(position);
+    }
+
+    loading_progress.collectibles_spawned = true;
+    info!("Collectibles spawned from level data");
 }
 
 // Removed: No longer pre-spawning collectible entities

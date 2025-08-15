@@ -45,6 +45,7 @@ fn main() -> AppExit {
         .add_plugins(assets::AssetsPlugin)
         .add_plugins(GameAudioPlugin)
         .add_plugins(SfxPlugin)
+        .add_plugins(game::LevelManagerPlugin)
         .add_event::<systems::dojo::pickup_item::PickupItemEvent>()
         .add_event::<systems::dojo::pickup_item::ItemPickedUpEvent>()
         .add_event::<systems::dojo::pickup_item::ItemPickupFailedEvent>()

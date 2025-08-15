@@ -7,6 +7,8 @@ use crate::constants::collectibles::COIN_STREAMING_RADIUS;
 use crate::screens::Screen;
 use crate::systems::character_controller::CharacterController;
 use crate::systems::dojo::PickupItemEvent;
+use crate::systems::objectives::ObjectiveManager;
+use crate::game::level_manager::LevelManager;
 use crate::assets::ModelAssets;
 use crate::resources::audio::{PlaySfxEvent, SfxType};
 
@@ -43,6 +45,13 @@ pub enum CollectibleType {
 #[derive(Resource)]
 pub struct NextItemToAdd(pub CollectibleType);
 
+// ===== EVENTS =====
+
+#[derive(Event)]
+pub struct CoinCollectedEvent {
+    pub coin_entity: Entity,
+    pub position: Vec3,
+}
 
 
 #[derive(Resource)]
@@ -134,7 +143,7 @@ impl Plugin for CollectiblesPlugin {
             .init_resource::<CollectibleSpawner>()
             .init_resource::<PlayerMovementTracker>()
             .init_resource::<NavigationBasedSpawner>()
-
+            .add_event::<CoinCollectedEvent>()
             // CoinStreamingManager now initialized in pregame_loading to persist between screens
             .add_systems(
                 Update,
@@ -143,6 +152,7 @@ impl Plugin for CollectiblesPlugin {
                     handle_coin_collisions,           // Handle collision-based coin collection
                     update_floating_items,
                     rotate_collectibles,
+                    handle_coin_collection,           // Handle coin collection events
 
                     crate::ui::inventory::add_item_to_inventory,
                     crate::ui::inventory::toggle_inventory_visibility,
@@ -302,8 +312,9 @@ fn handle_coin_collisions(
     mut commands: Commands,
     mut collision_events: EventReader<CollisionStarted>,
     player_query: Query<Entity, With<CharacterController>>,
-    coin_query: Query<(Entity, &CollectibleType, Option<&StreamingCoin>), (With<Collectible>, Without<Collected>)>,
+    coin_query: Query<(Entity, &CollectibleType, Option<&StreamingCoin>, &Transform), (With<Collectible>, Without<Collected>)>,
     mut pickup_events: EventWriter<PickupItemEvent>,
+    mut coin_collected_events: EventWriter<CoinCollectedEvent>,
     mut streaming_manager: ResMut<CoinStreamingManager>,
     mut sfx_events: EventWriter<PlaySfxEvent>,
 ) {
@@ -324,13 +335,22 @@ fn handle_coin_collisions(
         };
 
         // Check if the collectible is a coin
-        if let Ok((entity, collectible_type, streaming_coin)) = coin_query.get(collectible_entity) {
+        if let Ok((entity, collectible_type, streaming_coin, transform)) = coin_query.get(collectible_entity) {
             if *collectible_type == CollectibleType::Coin {
+                // Get coin position from transform
+                let coin_position = transform.translation;
+
                 // Remove from streaming manager if it's a streaming coin
                 if let Some(streaming) = streaming_coin {
                     streaming_manager.spawned_coins.remove(&streaming.position_id);
                     streaming_manager.collected_positions.insert(streaming.position_id);
                 }
+
+                // Emit coin collected event for objective tracking
+                coin_collected_events.write(CoinCollectedEvent {
+                    coin_entity: entity,
+                    position: coin_position,
+                });
 
                 // Play coin collection sound effect
                 sfx_events.write(PlaySfxEvent {
@@ -348,8 +368,6 @@ fn handle_coin_collisions(
                     item_type: *collectible_type,
                     item_entity: entity,
                 });
-
-
             }
         }
     }
@@ -407,6 +425,27 @@ fn track_player_movement(
     }
 }
 
+// System to handle coin collection and objective updates
+fn handle_coin_collection(
+    _commands: Commands,
+    mut coin_collection_events: EventReader<CoinCollectedEvent>,
+    mut objective_manager: ResMut<ObjectiveManager>,
+    level_manager: Res<LevelManager>,
+) {
+    for _event in coin_collection_events.read() {
+        // Update objectives that target coins
+        objective_manager.update_progress("coins", 1);
+        
+        // Mark the coin as collected in the streaming manager
+        // This will prevent it from respawning
+        
+        // Check if we should advance to next level
+        if objective_manager.are_all_completed() {
+            // Level completed logic will be handled by the objectives system
+            info!("All objectives completed for level {}!", level_manager.current_level);
+        }
+    }
+}
 
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

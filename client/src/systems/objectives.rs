@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::screens::Screen;
-use crate::systems::collectibles::CollectibleType;
 use crate::ui::styles::ElysiumDescentColorPalette;
+use crate::game::level_manager::{LevelManager, LevelCompletedEvent, ObjectiveData as LevelObjectiveData};
 
 // ===== COMPONENTS & RESOURCES =====
 
@@ -12,7 +12,7 @@ pub struct ObjectiveUI;
 
 #[derive(Component)]
 pub struct ObjectiveSlot {
-    // Removed unused objective_id field
+    pub objective_id: String,
 }
 
 #[derive(Component)]
@@ -20,46 +20,115 @@ pub struct ObjectiveCheckmark;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Objective {
-    pub id: usize,
+    pub id: String,
     pub title: String,
     pub description: String,
-    pub item_type: CollectibleType,
-    pub required_count: u32,
+    pub objective_type: String,
+    pub target: String,
+    pub required_count: Option<u32>,
     pub current_count: u32,
     pub completed: bool,
+    pub position: Option<Vec3>,
+    pub completion_radius: Option<f32>,
+    pub reward: String,
 }
 
 impl Objective {
-    pub fn new(id: usize, title: String, description: String, item_type: CollectibleType, required_count: u32) -> Self {
+    pub fn new(
+        id: String,
+        title: String,
+        description: String,
+        objective_type: String,
+        target: String,
+        required_count: Option<u32>,
+        position: Option<Vec3>,
+        completion_radius: Option<f32>,
+        reward: String,
+    ) -> Self {
         Self {
             id,
             title,
             description,
-            item_type,
+            objective_type,
+            target,
             required_count,
             current_count: 0,
             completed: false,
+            position,
+            completion_radius,
+            reward,
         }
     }
 
-    // Removed unused is_completed and add_progress methods
+    pub fn from_level_data(level_obj: &LevelObjectiveData) -> Self {
+        let position = level_obj.position.as_ref().map(|pos| Vec3::new(pos.x, pos.y, pos.z));
+        
+        Self::new(
+            level_obj.id.clone(),
+            level_obj.title.clone(),
+            level_obj.description.clone(),
+            level_obj.objective_type.clone(),
+            level_obj.target.clone(),
+            level_obj.required_count,
+            position,
+            level_obj.completion_radius,
+            level_obj.reward.clone(),
+        )
+    }
+
+    pub fn is_completed(&self) -> bool {
+        if let Some(required) = self.required_count {
+            self.current_count >= required
+        } else {
+            self.completed
+        }
+    }
+
+    pub fn add_progress(&mut self, amount: u32) {
+        self.current_count += amount;
+        if self.is_completed() {
+            self.completed = true;
+        }
+    }
 }
 
 #[derive(Resource, Default)]
 pub struct ObjectiveManager {
     pub objectives: Vec<Objective>,
-    pub next_id: usize,
+    pub level_objectives_completed: u32,
+    pub total_level_objectives: u32,
 }
-
-
 
 impl ObjectiveManager {
     pub fn add_objective(&mut self, objective: Objective) {
         self.objectives.push(objective);
-        self.next_id += 1;
+        self.total_level_objectives += 1;
     }
 
-    // Removed unused update_progress, get_objective, and are_all_completed methods
+    pub fn update_progress(&mut self, target: &str, amount: u32) {
+        for objective in &mut self.objectives {
+            if objective.target == target && !objective.completed {
+                objective.add_progress(amount);
+                if objective.completed {
+                    self.level_objectives_completed += 1;
+                }
+            }
+        }
+    }
+
+    pub fn get_objective(&self, id: &str) -> Option<&Objective> {
+        self.objectives.iter().find(|obj| obj.id == id)
+    }
+
+    pub fn are_all_completed(&self) -> bool {
+        self.level_objectives_completed >= self.total_level_objectives && self.total_level_objectives > 0
+    }
+
+    pub fn clear_objectives(&mut self) {
+        self.objectives.clear();
+        self.level_objectives_completed = 0;
+        self.total_level_objectives = 0;
+    }
 }
 
 // ===== PLUGIN =====
@@ -72,44 +141,44 @@ impl Plugin for ObjectivesPlugin {
             .add_systems(OnEnter(Screen::GamePlay), setup_initial_objectives)
             .add_systems(
                 Update,
-                (update_objective_ui,).run_if(in_state(Screen::GamePlay)),
-            );
+                (update_objective_ui, check_level_completion).run_if(in_state(Screen::GamePlay)),
+            )
+            .add_systems(OnExit(Screen::GamePlay), clear_objectives_on_exit);
     }
 }
 
 // ===== SYSTEMS =====
 
-fn setup_initial_objectives(mut objective_manager: ResMut<ObjectiveManager>) {
+fn setup_initial_objectives(
+    mut objective_manager: ResMut<ObjectiveManager>,
+    level_manager: Res<LevelManager>,
+) {
     // Clear any existing objectives
-    objective_manager.objectives.clear();
-    objective_manager.next_id = 0;
+    objective_manager.clear_objectives();
 
-    // Add objectives with different completion states (1/5, 2/5, 3/5, 4/5, 5/5)
-    let health_id = objective_manager.next_id;
-    let mut health_objective = Objective::new(health_id, "Collect Health Potions".to_string(), "Collect 5 Health Potions".to_string(), CollectibleType::HealthPotion, 5);
-    health_objective.current_count = 1; // 1/5 completed
-    objective_manager.add_objective(health_objective);
+    // Get objectives from current level
+    let current_level = level_manager.get_current_level();
+    
+    for level_objective in &current_level.objectives {
+        let objective = Objective::from_level_data(level_objective);
+        objective_manager.add_objective(objective);
+    }
+}
 
-    let survival_id = objective_manager.next_id;
-    let mut survival_objective = Objective::new(survival_id, "Find Survival Kits".to_string(), "Find 3 Survival Kits".to_string(), CollectibleType::SurvivalKit, 3);
-    survival_objective.current_count = 2; // 2/3 completed (equivalent to 2/5)
-    objective_manager.add_objective(survival_objective);
+fn check_level_completion(
+    objective_manager: Res<ObjectiveManager>,
+    mut level_completed_events: EventWriter<LevelCompletedEvent>,
+    level_manager: Res<LevelManager>,
+) {
+    if objective_manager.are_all_completed() {
+        level_completed_events.write(LevelCompletedEvent {
+            level_id: level_manager.current_level,
+        });
+    }
+}
 
-    let book_id = objective_manager.next_id;
-    let mut book_objective = Objective::new(book_id, "Gather Ancient Books".to_string(), "Gather 2 Ancient Books".to_string(), CollectibleType::Book, 2);
-    book_objective.current_count = 1; // 1/2 completed (equivalent to 3/5)
-    objective_manager.add_objective(book_objective);
-
-    let coin_id = objective_manager.next_id;
-    let mut coin_objective = Objective::new(coin_id, "Collect Golden Coins".to_string(), "Collect 10 Golden Coins".to_string(), CollectibleType::Coin, 10);
-    coin_objective.current_count = 8; // 8/10 completed (equivalent to 4/5)
-    objective_manager.add_objective(coin_objective);
-
-    let exploration_id = objective_manager.next_id;
-    let mut exploration_objective = Objective::new(exploration_id, "Explore Ancient Ruins".to_string(), "Visit 3 Ancient Ruins".to_string(), CollectibleType::Book, 3);
-    exploration_objective.current_count = 3; // 3/3 completed (equivalent to 5/5)
-    exploration_objective.completed = true; // Mark as completed
-    objective_manager.add_objective(exploration_objective);
+fn clear_objectives_on_exit(mut objective_manager: ResMut<ObjectiveManager>) {
+    objective_manager.clear_objectives();
 }
 
 fn update_objective_ui(
@@ -171,8 +240,8 @@ fn create_objective_slot(
     item_image: Handle<Image>,
     check_icon: Handle<Image>,
 ) -> impl Bundle {
-    let progress_percent = if objective.required_count > 0 {
-        objective.current_count as f32 / objective.required_count as f32
+    let progress_percent = if objective.required_count.is_some() {
+        objective.current_count as f32 / objective.required_count.unwrap() as f32
     } else {
         1.0
     };
@@ -191,7 +260,7 @@ fn create_objective_slot(
         BackgroundColor(Color::DARKER_GLASS),
         BorderRadius::all(Val::Px(18.0)),
         ObjectiveSlot {
-            // Removed unused objective_id field
+            objective_id: objective.id.clone(),
         },
         children![
             // Item Icon Container
@@ -304,7 +373,7 @@ fn create_objective_slot(
                     ),
                     // Progress Text
                     (
-                        Text::new(format!("{}/{}", objective.current_count, objective.required_count)),
+                        Text::new(format!("{}/{}", objective.current_count, objective.required_count.unwrap_or(0))),
                         TextFont {
                             font: font.clone(),
                             font_size: 18.0,

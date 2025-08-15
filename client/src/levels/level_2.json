@@ -1,0 +1,83 @@
+{
+  "level_id": 2,
+  "level_name": "The Deep Caverns",
+  "player_type": "Man",
+  "coins": {
+    "spawn_count": 20,
+    "spawn_positions": [
+      {"x": 60.0, "y": 1.0, "z": 10.0},
+      {"x": -60.0, "y": 1.0, "z": 15.0},
+      {"x": 65.0, "y": 1.0, "z": -5.0},
+      {"x": -65.0, "y": 1.0, "z": -10.0},
+      {"x": 70.0, "y": 1.0, "z": 20.0},
+      {"x": -70.0, "y": 1.0, "z": 25.0},
+      {"x": 75.0, "y": 1.0, "z": -15.0},
+      {"x": -75.0, "y": 1.0, "z": -20.0},
+      {"x": 80.0, "y": 1.0, "z": 30.0},
+      {"x": -80.0, "y": 1.0, "z": 35.0},
+      {"x": 85.0, "y": 1.0, "z": -25.0},
+      {"x": -85.0, "y": 1.0, "z": -30.0},
+      {"x": 90.0, "y": 1.0, "z": 40.0},
+      {"x": -90.0, "y": 1.0, "z": 45.0},
+      {"x": 95.0, "y": 1.0, "z": -35.0},
+      {"x": -95.0, "y": 1.0, "z": -40.0},
+      {"x": 100.0, "y": 1.0, "z": 50.0},
+      {"x": -100.0, "y": 1.0, "z": 55.0},
+      {"x": 105.0, "y": 1.0, "z": -45.0},
+      {"x": -105.0, "y": 1.0, "z": -50.0}
+    ]
+  },
+  "beasts": [
+    {
+      "id": "monster_2",
+      "beast_type": "Monster",
+      "spawn_position": {"x": 55.0, "y": 1.0, "z": 0.0},
+      "health": 150,
+      "damage": 35,
+      "speed": 4.0
+    },
+    {
+      "id": "monster_3",
+      "beast_type": "Monster",
+      "spawn_position": {"x": -55.0, "y": 1.0, "z": 0.0},
+      "health": 120,
+      "damage": 30,
+      "speed": 3.5
+    }
+  ],
+  "objectives": [
+    {
+      "id": "collect_more_coins",
+      "title": "Collect More Ancient Coins",
+      "description": "Collect 8 coins to unlock the next area",
+      "objective_type": "collect",
+      "target": "coins",
+      "required_count": 8,
+      "reward": "unlock_level_3"
+    },
+    {
+      "id": "find_crystal",
+      "title": "Find the Power Crystal",
+      "description": "Locate the power crystal to gain strength",
+      "objective_type": "reach_location",
+      "target": "power_crystal",
+      "position": {"x": 110.0, "y": 1.0, "z": 0.0},
+      "completion_radius": 5.0,
+      "reward": "crystal_power"
+    },
+    {
+      "id": "defeat_monsters",
+      "title": "Defeat the Guardians",
+      "description": "Defeat both monsters to prove your strength",
+      "objective_type": "defeat",
+      "target": "monster_2,monster_3",
+      "reward": "guardian_essence_enhanced"
+    }
+  ],
+  "environment": {
+    "dungeon_scale": 8.0,
+    "dungeon_position": {"x": 55.0, "y": -1.5, "z": 0.0},
+    "dungeon_rotation": -1.5708
+  },
+  "next_level": 3
+}

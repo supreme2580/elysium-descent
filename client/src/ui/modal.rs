@@ -26,7 +26,7 @@ pub struct NavigationTab {
 #[derive(Component)]
 pub struct QuestEntry {
     #[allow(dead_code)]
-    pub quest_id: usize,
+    pub quest_id: String,
 }
 
 #[derive(Component)]
@@ -385,13 +385,17 @@ pub fn update_quest_list(
     // Spawn 10 quests
     for i in 0..10 {
         let quest_objective = crate::systems::objectives::Objective {
-            id: i,
+            id: i.to_string(),
             title: quest_titles[i].to_string(),
             description: quest_descriptions[i].to_string(),
-            item_type: crate::systems::collectibles::CollectibleType::Coin,
-            required_count: ((i + 1) * 2) as u32,
+            objective_type: "quest".to_string(),
+            target: "quest_completion".to_string(),
+            required_count: Some(((i + 1) * 2) as u32),
             current_count: if i < 2 { ((i + 1) * 2) as u32 } else { 0 }, // First 2 are completed
             completed: i < 2,
+            position: None,
+            completion_radius: None,
+            reward: format!("{} Gold", (i + 1) * 250),
         };
         
         let quest_entity = spawn_quest_entry(&mut commands, &quest_objective, &font_assets, &ui_assets, i);
@@ -427,7 +431,7 @@ fn spawn_quest_entry(
         }),
         BorderColor(Color::ELYSIUM_GOLD.with_alpha(0.2)),
         BorderRadius::all(Val::Px(6.0)),
-        QuestEntry { quest_id: objective.id },
+        QuestEntry { quest_id: objective.id.clone() },
         children![
             // Quest icon (coin image)
             (
@@ -535,7 +539,7 @@ fn spawn_quest_entry(
                             ),
                             // Reward amount
                             (
-                                Text::new(format!("{} Gold", (objective.id + 1) * 250)),
+                                Text::new(format!("{} Gold", objective.reward)),
                                 TextFont {
                                     font: font_assets.rajdhani_medium.clone(),
                                     font_size: 24.0, // Scaled up by 1.5x from 16
