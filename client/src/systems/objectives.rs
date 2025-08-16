@@ -65,23 +65,12 @@ impl Objective {
         }
     }
 
-    // Helper methods to get current progress for collectible objectives
-    pub fn get_current_count(&self) -> u32 {
-        match &self.objective_type {
-            ObjectiveType::Collect(_, _) => 0, // This will be tracked separately
-            _ => 0,
-        }
-    }
-
+    // Helper method to get required count for collectible objectives
     pub fn get_required_count(&self) -> u32 {
         match &self.objective_type {
             ObjectiveType::Collect(_, count) => *count,
             _ => 0,
         }
-    }
-
-    pub fn is_collectible_type(&self) -> bool {
-        matches!(self.objective_type, ObjectiveType::Collect(_, _))
     }
 }
 
@@ -89,6 +78,7 @@ impl Objective {
 pub struct ObjectiveManager {
     pub objectives: Vec<Objective>,
     pub next_id: usize,
+    pub version: u32, // Track changes to trigger UI updates
 }
 
 
@@ -127,6 +117,7 @@ fn setup_initial_objectives(_objective_manager: ResMut<ObjectiveManager>) {
 fn update_objective_ui(
     mut commands: Commands,
     objective_manager: Res<ObjectiveManager>,
+    progress_tracker: Res<crate::systems::collectibles::CollectibleProgressTracker>,
     font_assets: Option<Res<crate::assets::FontAssets>>,
     ui_assets: Option<Res<crate::assets::UiAssets>>,
     _objectives_ui_query: Query<Entity, With<ObjectiveUI>>,
@@ -136,9 +127,17 @@ fn update_objective_ui(
     _children: Query<&Children>,
     names: Query<&Name>,
 ) {
-    if !objective_manager.is_changed() {
-        return; // Only update when objectives change
+    // Always update progress display, but only recreate UI when objectives change
+    let needs_ui_rebuild = objective_manager.is_changed();
+    let needs_progress_update = progress_tracker.is_changed();
+    
+    if !needs_ui_rebuild && !needs_progress_update {
+        return; // Only update when objectives or progress changes
     }
+    
+    // Log the current state for debugging
+    info!("🔄 Objectives UI update - Manager changed: {}, Progress changed: {}, Version: {}", 
+        needs_ui_rebuild, needs_progress_update, objective_manager.version);
 
     let Some(font_assets) = font_assets else { return; };
     let Some(ui_assets) = ui_assets else { return; };
@@ -169,7 +168,7 @@ fn update_objective_ui(
         let coin_image = ui_assets.coin.clone();
 
         for objective in &objective_manager.objectives {
-            let slot_entity = commands.spawn(create_objective_slot(objective, font.clone(), coin_image.clone(), ui_assets.green_check_icon.clone())).id();
+            let slot_entity = commands.spawn(create_objective_slot(objective, font.clone(), coin_image.clone(), ui_assets.green_check_icon.clone(), &progress_tracker)).id();
             commands.entity(list_entity).add_child(slot_entity);
         }
 
@@ -177,15 +176,8 @@ fn update_objective_ui(
         let view_more_entity = commands.spawn(create_view_more_button(font.clone())).id();
         commands.entity(list_entity).add_child(view_more_entity);
     } else if existing_slots_count == objectives_count {
-        // Check if any objectives have changed progress
-        let mut needs_update = false;
-        for (slot_index, _slot_entity) in existing_slots.iter().enumerate() {
-            if let Some(_objective) = objective_manager.objectives.get(slot_index) {
-                // For now, always recreate to ensure UI updates
-                needs_update = true;
-                break;
-            }
-        }
+        // Check if we need to update the UI
+        let needs_update = needs_ui_rebuild || needs_progress_update;
         
         if needs_update {
             // Clear existing objective slots
@@ -207,21 +199,13 @@ fn update_objective_ui(
             let coin_image = ui_assets.coin.clone();
             
             for objective in &objective_manager.objectives {
-                let slot_entity = commands.spawn(create_objective_slot(objective, font.clone(), coin_image.clone(), ui_assets.green_check_icon.clone())).id();
+                let slot_entity = commands.spawn(create_objective_slot(objective, font.clone(), coin_image.clone(), ui_assets.green_check_icon.clone(), &progress_tracker)).id();
                 commands.entity(list_entity).add_child(slot_entity);
             }
             
             // Add "View More" button after objectives
             let view_more_entity = commands.spawn(create_view_more_button(font.clone())).id();
             commands.entity(list_entity).add_child(view_more_entity);
-        } else {
-            // Update existing slots - just update the progress values
-            update_existing_objective_slots(
-                &mut commands,
-                &objective_manager,
-                &existing_slots,
-                &names,
-            );
         }
     } else {
         // Count mismatch - recreate everything
@@ -244,7 +228,7 @@ fn update_objective_ui(
         let coin_image = ui_assets.coin.clone();
 
         for objective in &objective_manager.objectives {
-            let slot_entity = commands.spawn(create_objective_slot(objective, font.clone(), coin_image.clone(), ui_assets.green_check_icon.clone())).id();
+            let slot_entity = commands.spawn(create_objective_slot(objective, font.clone(), coin_image.clone(), ui_assets.green_check_icon.clone(), &progress_tracker)).id();
             commands.entity(list_entity).add_child(slot_entity);
         }
 
@@ -254,27 +238,23 @@ fn update_objective_ui(
     }
 }
 
-/// Function to update existing objective slots without recreating the entire UI
-fn update_existing_objective_slots(
-    _commands: &mut Commands,
-    _objective_manager: &ObjectiveManager,
-    _existing_slots: &Query<Entity, With<ObjectiveSlot>>,
-    _names: &Query<&Name>,
-) {
-    // TODO: Implement proper UI updates using Bevy's component system
-    // This would require adding specific components to track progress bars and text
-    // and then updating them directly through queries
-}
+
 
 fn create_objective_slot(
     objective: &Objective,
     font: Handle<Font>,
     item_image: Handle<Image>,
     check_icon: Handle<Image>,
+    progress_tracker: &crate::systems::collectibles::CollectibleProgressTracker,
 ) -> impl Bundle {
     let (progress_text, progress_percent) = match &objective.objective_type {
-        ObjectiveType::Collect(_, required_count) => {
-            let current_count = 0; // This will be tracked separately
+        ObjectiveType::Collect(collectible_type, required_count) => {
+            let current_count = match collectible_type {
+                crate::systems::collectibles::CollectibleType::Coin => progress_tracker.coins_collected,
+                crate::systems::collectibles::CollectibleType::Book => progress_tracker.books_collected,
+                crate::systems::collectibles::CollectibleType::HealthPotion => progress_tracker.health_potions_collected,
+                crate::systems::collectibles::CollectibleType::SurvivalKit => progress_tracker.survival_kits_collected,
+            };
             let percent = if *required_count > 0 {
                 current_count as f32 / *required_count as f32
             } else {

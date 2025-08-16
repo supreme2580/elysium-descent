@@ -275,8 +275,12 @@ fn load_level_objectives(
         
         info!("✅ Created {} objectives", objective_manager.objectives.len());
         for (i, obj) in objective_manager.objectives.iter().enumerate() {
-            info!("  {}. '{}' - {:?}", i + 1, obj.title, obj.objective_type);
+            info!("  {}. '{}' - {:?} (completed: {})", i + 1, obj.title, obj.objective_type, obj.completed);
         }
+        
+        // Force change detection by incrementing version
+        objective_manager.version += 1;
+        info!("🔄 Initial objectives loaded, version set to: {}", objective_manager.version);
     }
 }
 
@@ -433,6 +437,16 @@ fn update_objective_progress(
     progress_tracker: Res<crate::systems::collectibles::CollectibleProgressTracker>,
     mut objective_manager: ResMut<ObjectiveManager>,
 ) {
+    let mut any_changes = false;
+    
+    // Log current progress for debugging
+    info!("📊 Progress check - Coins: {}/5, Books: {}, Health: {}, Survival: {}", 
+        progress_tracker.coins_collected,
+        progress_tracker.books_collected,
+        progress_tracker.health_potions_collected,
+        progress_tracker.survival_kits_collected
+    );
+    
     // Update objectives based on progress tracker
     for objective in &mut objective_manager.objectives {
         if let ObjectiveType::Collect(collectible_type, required_count) = &objective.objective_type {
@@ -448,8 +462,16 @@ fn update_objective_progress(
                 info!("🎉 Collectible objective '{}' completed! ({}/{})", 
                     objective.title, current_count, required_count);
                 objective.completed = true;
+                any_changes = true;
             }
         }
+    }
+    
+    // Force change detection if any objectives were updated
+    if any_changes {
+        // Increment version to trigger change detection
+        objective_manager.version += 1;
+        info!("🔄 Objective manager version updated to: {}", objective_manager.version);
     }
 }
 
