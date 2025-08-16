@@ -8,7 +8,8 @@ use crate::screens::Screen;
 use crate::systems::character_controller::CharacterController;
 use crate::assets::ModelAssets;
 use crate::resources::audio::{PlaySfxEvent, SfxType};
-
+use crate::systems::level_manager::LevelManager;
+use crate::systems::objectives::ObjectiveManager;
 
 
 // ===== RESOURCES =====
@@ -156,6 +157,7 @@ impl Plugin for CollectiblesPlugin {
                     handle_coin_collisions,           // Handle collision-based coin collection
                     update_floating_items,
                     rotate_collectibles,
+                    spawn_objective_targets,          // Spawn target items for reach_location objectives
 
                     crate::ui::inventory::add_item_to_inventory,
                     crate::ui::inventory::toggle_inventory_visibility,
@@ -495,6 +497,84 @@ impl Default for NavigationBasedSpawner {
             nav_positions: Vec::new(),
             spawn_probability: 0.15,     // 15% chance per nav position
             loaded: false,
+        }
+    }
+}
+
+// ===== TARGET ITEM SPAWNING FOR REACH_LOCATION OBJECTIVES =====
+
+/// Component to mark items that are targets for reach_location objectives
+#[derive(Component)]
+pub struct ObjectiveTarget {
+    pub objective_id: String,
+    pub target_type: String,
+}
+
+/// System to spawn target items for reach_location objectives
+pub fn spawn_objective_targets(
+    mut commands: Commands,
+    level_manager: Res<LevelManager>,
+    objective_manager: Res<ObjectiveManager>,
+    model_assets: Res<ModelAssets>,
+    target_query: Query<Entity, With<ObjectiveTarget>>,
+) {
+    // Only run when level changes or objectives are loaded
+    if !level_manager.is_changed() && !objective_manager.is_changed() {
+        return;
+    }
+
+    // Clear existing target items
+    for entity in target_query.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    // Get current level data
+    let Some(level_data) = level_manager.get_current_level() else { return; };
+
+    // Spawn target items for reach_location objectives
+    for level_obj in &level_data.objectives {
+        if level_obj.objective_type == "reach_location" {
+            if let Some(position) = &level_obj.position {
+                let target_pos = Vec3::new(position.x, position.y, position.z);
+                
+                // Determine which model to use based on target type
+                let model_handle = match level_obj.target.as_str() {
+                    "ancient_book" => model_assets.book.clone(),
+                    "mystery_box" => model_assets.mystery_box.clone(),
+                    "power_crystal" => model_assets.book.clone(), // Use book as fallback for power crystal
+                    _ => model_assets.book.clone(), // Default to book
+                };
+
+                // Spawn the target item
+                let _entity = commands.spawn((
+                    Name::new(format!("Objective Target: {}", level_obj.title)),
+                    SceneRoot(model_handle),
+                    Transform {
+                        translation: target_pos,
+                        scale: Vec3::splat(1.0),
+                        ..default()
+                    },
+                    ObjectiveTarget {
+                        objective_id: level_obj.id.clone(),
+                        target_type: level_obj.target.clone(),
+                    },
+                    Collectible,
+                    CollectibleType::Book, // Default type for reach_location targets
+                    FloatingItem {
+                        base_height: target_pos.y,
+                        hover_amplitude: 0.3,
+                        hover_speed: 1.5,
+                    },
+                    CollectibleRotation {
+                        enabled: true,
+                        clockwise: true,
+                        speed: 1.0,
+                    },
+                    Visibility::Visible,
+                )).id();
+
+                info!("🎯 Spawned objective target '{}' at position {:?}", level_obj.title, target_pos);
+            }
         }
     }
 }

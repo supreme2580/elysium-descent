@@ -134,4 +134,29 @@ mod tests {
         level_manager.mark_level_completed();
         assert_eq!(level_manager.is_level_completed(), true);
     }
+
+    #[test]
+    fn test_reach_location_objective() {
+        let position = Position3D { x: 90.0, y: 22.0, z: -54.0 };
+        let reach_objective = LevelObjectiveData {
+            id: "find_ancient_book".to_string(),
+            title: "Find the Ancient Book".to_string(),
+            description: "Locate the ancient book to gain knowledge".to_string(),
+            objective_type: "reach_location".to_string(),
+            target: "ancient_book".to_string(),
+            required_count: None,
+            position: Some(position),
+            completion_radius: Some(5.0),
+            reward: "ancient_knowledge".to_string(),
+        };
+        
+        // Test that reach_location objectives have position data
+        assert_eq!(reach_objective.objective_type, "reach_location");
+        assert!(reach_objective.position.is_some());
+        assert_eq!(reach_objective.position.unwrap().x, 90.0);
+        assert_eq!(reach_objective.position.unwrap().y, 22.0);
+        assert_eq!(reach_objective.position.unwrap().z, -54.0);
+        assert_eq!(reach_objective.completion_radius, Some(5.0));
+        assert_eq!(reach_objective.target, "ancient_book");
+    }
 }

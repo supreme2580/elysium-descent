@@ -113,6 +113,9 @@ pub struct ModelAssets {
 
     #[asset(path = "models/book.glb#Scene0")]
     pub book: Handle<Scene>,
+
+    #[asset(path = "models/mystery_box.glb#Scene0")]
+    pub mystery_box: Handle<Scene>,
 }
 
 // Movie/Video Assets
