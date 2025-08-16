@@ -273,7 +273,7 @@ fn create_objective_slot(
     (
         Node {
             width: Val::Percent(100.0),
-            height: Val::Px(136.0),
+            height: Val::Px(160.0), // Increased from 136px to 160px for better progress bar spacing
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::Center,
             margin: UiRect::bottom(Val::Px(12.0)),
@@ -291,7 +291,7 @@ fn create_objective_slot(
             (
                 Node {
                     width: Val::Px(96.0),
-                    height: Val::Px(96.0),
+                    height: Val::Px(120.0), // Increased from 96px to 120px to maintain proportions
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
                     margin: UiRect::right(Val::Px(18.0)),
@@ -363,7 +363,7 @@ fn create_objective_slot(
                     flex_direction: FlexDirection::Column,
                     justify_content: JustifyContent::SpaceBetween,
                     width: Val::Px(300.0),
-                    height: Val::Px(96.0),
+                    height: Val::Px(120.0), // Increased from 96px to 120px to maintain proportions
                     ..default()
                 },
                 children![
@@ -413,23 +413,23 @@ fn create_objective_slot(
                     (
                         Node {
                             width: Val::Px(270.0),
-                            height: Val::Px(12.0),
+                            height: Val::Px(16.0), // Increased from 12px to 16px for better visibility
                             border: UiRect::all(Val::Px(1.5)),
                             ..default()
                         },
                         BackgroundColor(Color::DARKER_GLASS),
                         BorderColor(Color::ELYSIUM_GOLD.with_alpha(0.4)),
-                        BorderRadius::all(Val::Px(6.0)),
+                        BorderRadius::all(Val::Px(8.0)), // Adjusted border radius for new height
                         children![
                             (
                                 Node {
                                     width: Val::Px(267.0 * progress_percent),
-                                    height: Val::Px(9.0),
+                                    height: Val::Px(13.0), // Increased from 9px to 13px for better visibility
                                     margin: UiRect::all(Val::Px(1.5)),
                                     ..default()
                                 },
                                 BackgroundColor(Color::ELYSIUM_GOLD),
-                                BorderRadius::all(Val::Px(4.5)),
+                                BorderRadius::all(Val::Px(6.5)), // Adjusted border radius for new height
                             )
                         ]
                     )
