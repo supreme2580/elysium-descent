@@ -290,7 +290,7 @@ fn create_objective_slot(
             // Item Icon Container
             (
                 Node {
-                    width: Val::Px(96.0),
+                    width: Val::Px(113.0), // Increased from 96px to 113px to maintain proportions (17.6% increase)
                     height: Val::Px(120.0), // Increased from 96px to 120px to maintain proportions
                     justify_content: JustifyContent::Center,
                     align_items: AlignItems::Center,
@@ -362,7 +362,7 @@ fn create_objective_slot(
                 Node {
                     flex_direction: FlexDirection::Column,
                     justify_content: JustifyContent::SpaceBetween,
-                    width: Val::Px(300.0),
+                    width: Val::Px(353.0), // Increased from 300px to 353px to maintain proportions (17.6% increase)
                     height: Val::Px(120.0), // Increased from 96px to 120px to maintain proportions
                     ..default()
                 },
@@ -412,7 +412,7 @@ fn create_objective_slot(
                     // Progress Bar
                     (
                         Node {
-                            width: Val::Px(270.0),
+                            width: Val::Px(318.0), // Increased from 270px to 318px to maintain proportions (17.6% increase)
                             height: Val::Px(16.0), // Increased from 12px to 16px for better visibility
                             border: UiRect::all(Val::Px(1.5)),
                             ..default()
@@ -423,7 +423,7 @@ fn create_objective_slot(
                         children![
                             (
                                 Node {
-                                    width: Val::Px(267.0 * progress_percent),
+                                    width: Val::Px(315.0 * progress_percent), // Increased from 267px to 315px to maintain proportions (17.6% increase)
                                     height: Val::Px(13.0), // Increased from 9px to 13px for better visibility
                                     margin: UiRect::all(Val::Px(1.5)),
                                     ..default()

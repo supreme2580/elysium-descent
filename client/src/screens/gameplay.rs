@@ -188,7 +188,7 @@ fn spawn_objectives_ui(
             position_type: PositionType::Absolute,
             top: Val::Px(32.0),
             right: Val::Px(32.0),
-            width: Val::Px(480.0),
+            width: Val::Px(540.0), // Increased from 480px to 540px to accommodate wider objective items
             height: Val::Auto, // Auto-size based on content
             flex_direction: FlexDirection::Column,
             padding: UiRect::all(Val::Px(24.0)),
