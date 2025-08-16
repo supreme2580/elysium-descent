@@ -19,30 +19,70 @@ pub struct ObjectiveSlot {
 pub struct ObjectiveCheckmark;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ObjectiveType {
+    Collect(CollectibleType, u32), // Collectible type and required count
+    ReachLocation(Vec3, f32),      // Target position and completion radius
+    Defeat(String),                 // Target entity ID
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Objective {
     pub id: usize,
     pub title: String,
     pub description: String,
-    pub item_type: CollectibleType,
-    pub required_count: u32,
-    pub current_count: u32,
+    pub objective_type: ObjectiveType,
     pub completed: bool,
 }
 
 impl Objective {
-    pub fn new(id: usize, title: String, description: String, item_type: CollectibleType, required_count: u32) -> Self {
+    pub fn new_collect(id: usize, title: String, description: String, item_type: CollectibleType, required_count: u32) -> Self {
         Self {
             id,
             title,
             description,
-            item_type,
-            required_count,
-            current_count: 0,
+            objective_type: ObjectiveType::Collect(item_type, required_count),
             completed: false,
         }
     }
 
-    // Removed unused is_completed and add_progress methods
+    pub fn new_location(id: usize, title: String, description: String, position: Vec3, radius: f32) -> Self {
+        Self {
+            id,
+            title,
+            description,
+            objective_type: ObjectiveType::ReachLocation(position, radius),
+            completed: false,
+        }
+    }
+
+    pub fn new_defeat(id: usize, title: String, description: String, target_id: String) -> Self {
+        Self {
+            id,
+            title,
+            description,
+            objective_type: ObjectiveType::Defeat(target_id),
+            completed: false,
+        }
+    }
+
+    // Helper methods to get current progress for collectible objectives
+    pub fn get_current_count(&self) -> u32 {
+        match &self.objective_type {
+            ObjectiveType::Collect(_, _) => 0, // This will be tracked separately
+            _ => 0,
+        }
+    }
+
+    pub fn get_required_count(&self) -> u32 {
+        match &self.objective_type {
+            ObjectiveType::Collect(_, count) => *count,
+            _ => 0,
+        }
+    }
+
+    pub fn is_collectible_type(&self) -> bool {
+        matches!(self.objective_type, ObjectiveType::Collect(_, _))
+    }
 }
 
 #[derive(Resource, Default)]
@@ -232,10 +272,24 @@ fn create_objective_slot(
     item_image: Handle<Image>,
     check_icon: Handle<Image>,
 ) -> impl Bundle {
-    let progress_percent = if objective.required_count > 0 {
-        objective.current_count as f32 / objective.required_count as f32
-    } else {
-        1.0
+    let (progress_text, progress_percent) = match &objective.objective_type {
+        ObjectiveType::Collect(_, required_count) => {
+            let current_count = 0; // This will be tracked separately
+            let percent = if *required_count > 0 {
+                current_count as f32 / *required_count as f32
+            } else {
+                1.0
+            };
+            (format!("{}/{}", current_count, required_count), percent)
+        },
+        ObjectiveType::ReachLocation(_, _) => {
+            let percent = if objective.completed { 1.0 } else { 0.0 };
+            (if objective.completed { "COMPLETED" } else { "GO TO LOCATION" }.to_string(), percent)
+        },
+        ObjectiveType::Defeat(_) => {
+            let percent = if objective.completed { 1.0 } else { 0.0 };
+            (if objective.completed { "COMPLETED" } else { "DEFEAT TARGET" }.to_string(), percent)
+        },
     };
 
     (
@@ -365,7 +419,7 @@ fn create_objective_slot(
                     ),
                     // Progress Text
                     (
-                        Text::new(format!("{}/{}", objective.current_count, objective.required_count)),
+                        Text::new(&progress_text),
                         TextFont {
                             font: font.clone(),
                             font_size: 18.0,

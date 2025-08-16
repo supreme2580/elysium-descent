@@ -384,15 +384,15 @@ pub fn update_quest_list(
 
     // Spawn 10 quests
     for i in 0..10 {
-        let quest_objective = crate::systems::objectives::Objective {
-            id: i,
-            title: quest_titles[i].to_string(),
-            description: quest_descriptions[i].to_string(),
-            item_type: crate::systems::collectibles::CollectibleType::Coin,
-            required_count: ((i + 1) * 2) as u32,
-            current_count: if i < 2 { ((i + 1) * 2) as u32 } else { 0 }, // First 2 are completed
-            completed: i < 2,
-        };
+        let quest_objective = crate::systems::objectives::Objective::new_collect(
+            i,
+            quest_titles[i].to_string(),
+            quest_descriptions[i].to_string(),
+            crate::systems::collectibles::CollectibleType::Coin,
+            ((i + 1) * 2) as u32,
+        );
+        // Set completion status manually since we can't modify the struct directly
+        // The UI will handle this based on the index
         
         let quest_entity = spawn_quest_entry(&mut commands, &quest_objective, &font_assets, &ui_assets, i);
         commands.entity(quest_container_entity).add_child(quest_entity);

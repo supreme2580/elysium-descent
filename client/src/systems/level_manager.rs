@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::screens::Screen;
 use crate::systems::collectibles::{CollectibleType, CoinStreamingManager};
-use crate::systems::objectives::{Objective, ObjectiveManager};
+use crate::systems::objectives::{Objective, ObjectiveManager, ObjectiveType};
 use crate::systems::character_controller::CharacterController;
 
 // ===== LEVEL DATA STRUCTURES =====
@@ -174,6 +174,8 @@ fn load_level_objectives(
     mut coin_streaming_manager: ResMut<CoinStreamingManager>,
 ) {
     if let Some(level_data) = level_manager.get_current_level() {
+        info!("🎯 Loading objectives for level {}: {}", level_data.level_id, level_data.level_name);
+        
         // Clear existing objectives
         objective_manager.objectives.clear();
         objective_manager.next_id = 0;
@@ -196,26 +198,84 @@ fn load_level_objectives(
         for level_obj in level_data.objectives.iter() {
             let objective_id = objective_manager.next_id;
             
-            // Determine collectible type based on objective target
-            let collectible_type = match level_obj.target.as_str() {
-                "coins" => CollectibleType::Coin,
-                "ancient_book" => CollectibleType::Book,
-                "power_crystal" => CollectibleType::Book, // Using Book as placeholder
-                _ => CollectibleType::Coin, // Default to coin
+            info!("📋 Processing objective: '{}' (type: {})", level_obj.title, level_obj.objective_type);
+            
+            let objective = match level_obj.objective_type.as_str() {
+                "collect" => {
+                    // Determine collectible type based on objective target
+                    let collectible_type = match level_obj.target.as_str() {
+                        "coins" => CollectibleType::Coin,
+                        "ancient_book" => CollectibleType::Book,
+                        "power_crystal" => CollectibleType::Book,
+                        _ => CollectibleType::Coin,
+                    };
+                    
+                    let required_count = level_obj.required_count.unwrap_or(1);
+                    info!("  📦 Creating collect objective: {:?} x{}", collectible_type, required_count);
+                    Objective::new_collect(
+                        objective_id,
+                        level_obj.title.clone(),
+                        level_obj.description.clone(),
+                        collectible_type,
+                        required_count,
+                    )
+                },
+                "reach_location" => {
+                    if let Some(position) = &level_obj.position {
+                        let target_pos = Vec3::new(position.x, position.y, position.z);
+                        let radius = level_obj.completion_radius.unwrap_or(5.0);
+                        info!("  📍 Creating location objective: pos={:?}, radius={}", target_pos, radius);
+                        Objective::new_location(
+                            objective_id,
+                            level_obj.title.clone(),
+                            level_obj.description.clone(),
+                            target_pos,
+                            radius,
+                        )
+                    } else {
+                        // Fallback to collect objective if no position
+                        let collectible_type = CollectibleType::Book;
+                        let required_count = level_obj.required_count.unwrap_or(1);
+                        info!("  ⚠️  No position found, falling back to collect objective");
+                        Objective::new_collect(
+                            objective_id,
+                            level_obj.title.clone(),
+                            level_obj.description.clone(),
+                            collectible_type,
+                            required_count,
+                        )
+                    }
+                },
+                "defeat" => {
+                    info!("  ⚔️  Creating defeat objective: {}", level_obj.target);
+                    Objective::new_defeat(
+                        objective_id,
+                        level_obj.title.clone(),
+                        level_obj.description.clone(),
+                        level_obj.target.clone(),
+                    )
+                },
+                _ => {
+                    // Default to collect objective
+                    let collectible_type = CollectibleType::Coin;
+                    let required_count = level_obj.required_count.unwrap_or(1);
+                    info!("  ❓ Unknown type, defaulting to collect objective");
+                    Objective::new_collect(
+                        objective_id,
+                        level_obj.title.clone(),
+                        level_obj.description.clone(),
+                        collectible_type,
+                        required_count,
+                    )
+                }
             };
             
-            // Determine required count
-            let required_count = level_obj.required_count.unwrap_or(1);
-            
-            let objective = Objective::new(
-                objective_id,
-                level_obj.title.clone(),
-                level_obj.description.clone(),
-                collectible_type,
-                required_count,
-            );
-            
             objective_manager.add_objective(objective);
+        }
+        
+        info!("✅ Created {} objectives", objective_manager.objectives.len());
+        for (i, obj) in objective_manager.objectives.iter().enumerate() {
+            info!("  {}. '{}' - {:?}", i + 1, obj.title, obj.objective_type);
         }
     }
 }
@@ -292,27 +352,73 @@ fn handle_level_transitions(
                     }
                     
                     // Convert level objectives to game objectives
-                    for level_obj in &level_data.objectives {
+                    for level_obj in level_data.objectives.iter() {
                         let objective_id = objective_manager.next_id;
                         
-                        // Determine collectible type based on objective target
-                        let collectible_type = match level_obj.target.as_str() {
-                            "coins" => CollectibleType::Coin,
-                            "ancient_book" => CollectibleType::Book,
-                            "power_crystal" => CollectibleType::Book, // Using Book as placeholder
-                            _ => CollectibleType::Coin, // Default to coin
+                        let objective = match level_obj.objective_type.as_str() {
+                            "collect" => {
+                                // Determine collectible type based on objective target
+                                let collectible_type = match level_obj.target.as_str() {
+                                    "coins" => CollectibleType::Coin,
+                                    "ancient_book" => CollectibleType::Book,
+                                    "power_crystal" => CollectibleType::Book,
+                                    _ => CollectibleType::Coin,
+                                };
+                                
+                                let required_count = level_obj.required_count.unwrap_or(1);
+                                Objective::new_collect(
+                                    objective_id,
+                                    level_obj.title.clone(),
+                                    level_obj.description.clone(),
+                                    collectible_type,
+                                    required_count,
+                                )
+                            },
+                            "reach_location" => {
+                                if let Some(position) = &level_obj.position {
+                                    let target_pos = Vec3::new(position.x, position.y, position.z);
+                                    let radius = level_obj.completion_radius.unwrap_or(5.0);
+                                    Objective::new_location(
+                                        objective_id,
+                                        level_obj.title.clone(),
+                                        level_obj.description.clone(),
+                                        target_pos,
+                                        radius,
+                                    )
+                                } else {
+                                    // Fallback to collect objective if no position
+                                    let collectible_type = CollectibleType::Book;
+                                    let required_count = level_obj.required_count.unwrap_or(1);
+                                    Objective::new_collect(
+                                        objective_id,
+                                        level_obj.title.clone(),
+                                        level_obj.description.clone(),
+                                        collectible_type,
+                                        required_count,
+                                    )
+                                }
+                            },
+                            "defeat" => {
+                                Objective::new_defeat(
+                                    objective_id,
+                                    level_obj.title.clone(),
+                                    level_obj.description.clone(),
+                                    level_obj.target.clone(),
+                                )
+                            },
+                            _ => {
+                                // Default to collect objective
+                                let collectible_type = CollectibleType::Coin;
+                                let required_count = level_obj.required_count.unwrap_or(1);
+                                Objective::new_collect(
+                                    objective_id,
+                                    level_obj.title.clone(),
+                                    level_obj.description.clone(),
+                                    collectible_type,
+                                    required_count,
+                                )
+                            }
                         };
-                        
-                        // Determine required count
-                        let required_count = level_obj.required_count.unwrap_or(1);
-                        
-                        let objective = Objective::new(
-                            objective_id,
-                            level_obj.title.clone(),
-                            level_obj.description.clone(),
-                            collectible_type,
-                            required_count,
-                        );
                         
                         objective_manager.add_objective(objective);
                     }
@@ -324,23 +430,23 @@ fn handle_level_transitions(
 
 /// System to update objective progress based on collectible collection
 fn update_objective_progress(
-    mut objective_manager: ResMut<ObjectiveManager>,
     progress_tracker: Res<crate::systems::collectibles::CollectibleProgressTracker>,
+    mut objective_manager: ResMut<ObjectiveManager>,
 ) {
     // Update objectives based on progress tracker
     for objective in &mut objective_manager.objectives {
-        let current_count = match objective.item_type {
-            crate::systems::collectibles::CollectibleType::Coin => progress_tracker.coins_collected,
-            crate::systems::collectibles::CollectibleType::Book => progress_tracker.books_collected,
-            crate::systems::collectibles::CollectibleType::HealthPotion => progress_tracker.health_potions_collected,
-            crate::systems::collectibles::CollectibleType::SurvivalKit => progress_tracker.survival_kits_collected,
-        };
-        
-        if current_count != objective.current_count {
-            objective.current_count = current_count;
+        if let ObjectiveType::Collect(collectible_type, required_count) = &objective.objective_type {
+            let current_count = match collectible_type {
+                crate::systems::collectibles::CollectibleType::Coin => progress_tracker.coins_collected,
+                crate::systems::collectibles::CollectibleType::Book => progress_tracker.books_collected,
+                crate::systems::collectibles::CollectibleType::HealthPotion => progress_tracker.health_potions_collected,
+                crate::systems::collectibles::CollectibleType::SurvivalKit => progress_tracker.survival_kits_collected,
+            };
             
             // Check if objective is completed
-            if objective.current_count >= objective.required_count && !objective.completed {
+            if current_count >= *required_count && !objective.completed {
+                info!("🎉 Collectible objective '{}' completed! ({}/{})", 
+                    objective.title, current_count, required_count);
                 objective.completed = true;
             }
         }
@@ -349,29 +455,23 @@ fn update_objective_progress(
 
 /// System to check location-based objectives
 fn check_location_objectives(
-    level_manager: Res<LevelManager>,
+    _level_manager: Res<LevelManager>,
     mut objective_manager: ResMut<ObjectiveManager>,
     player_query: Query<&Transform, With<CharacterController>>,
 ) {
-    if let (Some(level_data), Ok(player_transform)) = (level_manager.get_current_level(), player_query.single()) {
+    if let Ok(player_transform) = player_query.single() {
         let player_pos = player_transform.translation;
         
-        for level_obj in &level_data.objectives {
-            if level_obj.objective_type == "reach_location" {
-                if let Some(target_position) = &level_obj.position {
-                    let target_vec3 = Vec3::new(target_position.x, target_position.y, target_position.z);
-                    let distance = player_pos.distance(target_vec3);
-                    let completion_radius = level_obj.completion_radius.unwrap_or(5.0);
-                    
-                    if distance <= completion_radius {
-                        // Find and complete the corresponding objective
-                        for objective in &mut objective_manager.objectives {
-                            if objective.title == level_obj.title && !objective.completed {
-                                objective.completed = true;
-                                info!("Location objective completed: {}", objective.title);
-                                break;
-                            }
-                        }
+        // Check all objectives for location-based ones
+        for objective in &mut objective_manager.objectives {
+            if let ObjectiveType::ReachLocation(target_pos, radius) = &objective.objective_type {
+                if !objective.completed {
+                    let distance = player_pos.distance(*target_pos);
+                    info!("📍 Checking location objective '{}': player at {:?}, target at {:?}, distance = {:.2}, radius = {}", 
+                        objective.title, player_pos, target_pos, distance, radius);
+                    if distance <= *radius {
+                        objective.completed = true;
+                        info!("🎉 Location objective '{}' completed!", objective.title);
                     }
                 }
             }
@@ -389,8 +489,7 @@ fn check_defeat_objectives(
         for level_obj in &level_data.objectives {
             if level_obj.objective_type == "defeat" {
                 // This would need to be connected to the combat system
-                // For now, we'll just log that we found a defeat objective
-                debug!("Found defeat objective: {} - {}", level_obj.title, level_obj.target);
+                // For now, this is a placeholder
             }
         }
     }
