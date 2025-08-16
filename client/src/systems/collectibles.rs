@@ -9,14 +9,7 @@ use crate::systems::character_controller::CharacterController;
 use crate::assets::ModelAssets;
 use crate::resources::audio::{PlaySfxEvent, SfxType};
 
-// ===== EVENTS =====
 
-/// Event emitted when a collectible is collected
-#[derive(Event)]
-pub struct CollectibleCollectedEvent {
-    pub collectible_type: CollectibleType,
-    pub entity: Entity,
-}
 
 // ===== RESOURCES =====
 
@@ -149,8 +142,7 @@ pub struct CollectiblesPlugin;
 
 impl Plugin for CollectiblesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<CollectibleCollectedEvent>()
-            .init_resource::<CollectibleProgressTracker>()
+        app.init_resource::<CollectibleProgressTracker>()
             .insert_resource(crate::ui::inventory::InventoryVisibilityState::default())
             .init_resource::<CollectibleSpawner>()
             .init_resource::<PlayerMovementTracker>()
@@ -324,7 +316,6 @@ fn handle_coin_collisions(
     mut collision_events: EventReader<CollisionStarted>,
     player_query: Query<Entity, With<CharacterController>>,
     coin_query: Query<(Entity, &CollectibleType, Option<&StreamingCoin>), (With<Collectible>, Without<Collected>)>,
-    mut collectible_events: EventWriter<CollectibleCollectedEvent>,
     mut progress_tracker: ResMut<CollectibleProgressTracker>,
     mut streaming_manager: ResMut<CoinStreamingManager>,
     mut sfx_events: EventWriter<PlaySfxEvent>,
@@ -369,29 +360,19 @@ fn handle_coin_collisions(
                 match collectible_type {
                     CollectibleType::Coin => {
                         progress_tracker.coins_collected += 1;
-                        info!("🪙 Coin collected! Total: {}", progress_tracker.coins_collected);
                     },
                     CollectibleType::Book => {
                         progress_tracker.books_collected += 1;
-                        info!("📚 Book collected! Total: {}", progress_tracker.books_collected);
                     },
                     CollectibleType::HealthPotion => {
                         progress_tracker.health_potions_collected += 1;
-                        info!("❤️ Health potion collected! Total: {}", progress_tracker.health_potions_collected);
                     },
                     CollectibleType::SurvivalKit => {
                         progress_tracker.survival_kits_collected += 1;
-                        info!("🛠️ Survival kit collected! Total: {}", progress_tracker.survival_kits_collected);
                     },
                 }
                 
-                // Trigger collectible collected event
-                info!("🎯 Sending CollectibleCollectedEvent for {:?}", collectible_type);
-                collectible_events.write(CollectibleCollectedEvent {
-                    collectible_type: *collectible_type,
-                    entity,
-                });
-                info!("✅ CollectibleCollectedEvent sent successfully");
+
 
 
             }

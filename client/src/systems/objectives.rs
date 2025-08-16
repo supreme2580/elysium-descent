@@ -217,30 +217,10 @@ fn update_objective_ui(
 /// Function to update existing objective slots without recreating the entire UI
 fn update_existing_objective_slots(
     _commands: &mut Commands,
-    objective_manager: &ObjectiveManager,
-    existing_slots: &Query<Entity, With<ObjectiveSlot>>,
+    _objective_manager: &ObjectiveManager,
+    _existing_slots: &Query<Entity, With<ObjectiveSlot>>,
     _names: &Query<&Name>,
 ) {
-    info!("Updating {} existing objective slots with new progress values", existing_slots.iter().count());
-    
-    // For now, we'll use a simpler approach: just log the updates
-    // The UI will be updated on the next frame when the objectives system runs
-    for (slot_index, _slot_entity) in existing_slots.iter().enumerate() {
-        if let Some(objective) = objective_manager.objectives.get(slot_index) {
-            info!("📊 Objective {}: '{}' - Progress: {}/{} ({}%)", 
-                slot_index + 1,
-                objective.title,
-                objective.current_count,
-                objective.required_count,
-                if objective.required_count > 0 {
-                    (objective.current_count as f32 / objective.required_count as f32 * 100.0) as u32
-                } else {
-                    100
-                }
-            );
-        }
-    }
-    
     // TODO: Implement proper UI updates using Bevy's component system
     // This would require adding specific components to track progress bars and text
     // and then updating them directly through queries

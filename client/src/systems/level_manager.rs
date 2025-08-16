@@ -174,8 +174,6 @@ fn load_level_objectives(
     mut coin_streaming_manager: ResMut<CoinStreamingManager>,
 ) {
     if let Some(level_data) = level_manager.get_current_level() {
-        info!("🎯 Loading objectives for level {}: {}", level_data.level_id, level_data.level_name);
-        
         // Clear existing objectives
         objective_manager.objectives.clear();
         objective_manager.next_id = 0;
@@ -193,7 +191,6 @@ fn load_level_objectives(
                 position.z,
             ));
         }
-        info!("📍 Loaded {} coin positions", level_data.coins.spawn_positions.len());
         
         // Convert level objectives to game objectives
         for level_obj in level_data.objectives.iter() {
@@ -210,9 +207,6 @@ fn load_level_objectives(
             // Determine required count
             let required_count = level_obj.required_count.unwrap_or(1);
             
-            info!("🎯 Creating objective: '{}' (type: {:?}, target: '{}', required: {})", 
-                level_obj.title, collectible_type, level_obj.target, required_count);
-            
             let objective = Objective::new(
                 objective_id,
                 level_obj.title.clone(),
@@ -223,8 +217,6 @@ fn load_level_objectives(
             
             objective_manager.add_objective(objective);
         }
-        
-        info!("✅ Created {} objectives for level {}", objective_manager.objectives.len(), level_data.level_id);
     }
 }
 
@@ -263,7 +255,6 @@ fn mark_level_completed(
         let all_completed = objective_manager.objectives.iter().all(|obj| obj.completed);
         if all_completed {
             level_manager.mark_level_completed();
-            info!("Level {} completed!", level_manager.current_level.unwrap_or(0));
         }
     }
 }
@@ -336,9 +327,6 @@ fn update_objective_progress(
     mut objective_manager: ResMut<ObjectiveManager>,
     progress_tracker: Res<crate::systems::collectibles::CollectibleProgressTracker>,
 ) {
-    // Debug: Log that this system is running
-    info!("🔄 update_objective_progress system running");
-    
     // Update objectives based on progress tracker
     for objective in &mut objective_manager.objectives {
         let current_count = match objective.item_type {
@@ -349,15 +337,11 @@ fn update_objective_progress(
         };
         
         if current_count != objective.current_count {
-            info!("📊 Updating objective '{}' from {}/{} to {}/{}", 
-                objective.title, objective.current_count, objective.required_count, current_count, objective.required_count);
-            
             objective.current_count = current_count;
             
             // Check if objective is completed
             if objective.current_count >= objective.required_count && !objective.completed {
                 objective.completed = true;
-                info!("🎉 Objective '{}' completed!", objective.title);
             }
         }
     }
@@ -412,40 +396,7 @@ fn check_defeat_objectives(
     }
 }
 
-/// Debug system to show level information
-fn debug_level_info(
-    level_manager: Res<LevelManager>,
-    objective_manager: Res<ObjectiveManager>,
-) {
-    if level_manager.is_changed() || objective_manager.is_changed() {
-        if let Some(level_data) = level_manager.get_current_level() {
-            info!("=== Level {}: {} ===", level_data.level_id, level_data.level_name);
-            info!("Player Type: {}", level_data.player_type);
-            info!("Coins to spawn: {}", level_data.coins.spawn_count);
-            info!("Beasts: {}", level_data.beasts.len());
-            info!("Objectives: {}", level_data.objectives.len());
-            
-            for (i, objective) in objective_manager.objectives.iter().enumerate() {
-                info!("  Objective {}: {} ({}/{}) - {}", 
-                    i + 1, 
-                    objective.title, 
-                    objective.current_count, 
-                    objective.required_count,
-                    if objective.completed { "COMPLETED" } else { "IN PROGRESS" }
-                );
-            }
-            
-            if level_manager.is_level_completed() {
-                info!("Level {} COMPLETED!", level_data.level_id);
-                if let Some(next_level) = level_data.next_level {
-                    info!("Next level: {}", next_level);
-                } else {
-                    info!("This is the final level!");
-                }
-            }
-        }
-    }
-}
+
 
 /// System to check if player has reached the next level area
 fn check_next_level_transition(
@@ -458,40 +409,17 @@ fn check_next_level_transition(
         // Check if player has reached the next level area (beyond the current level's boundaries)
         // For level 1, check if player has moved significantly forward
         if level_data.level_id == 1 && player_pos.x > 60.0 {
-            info!("Player has reached the next level area! Current position: {:?}", player_pos);
+            // Player has reached next level area
         }
         
         // For level 2, check if player has moved even further
         if level_data.level_id == 2 && player_pos.x > 120.0 {
-            info!("Player has reached the next level area! Current position: {:?}", player_pos);
+            // Player has reached next level area
         }
     }
 }
 
-/// Debug system to test event system (temporary)
-fn debug_event_system(
-    level_manager: Res<LevelManager>,
-    objective_manager: Res<ObjectiveManager>,
-) {
-    // This is a temporary debug system to verify the event system is working
-    static mut DEBUG_COUNTER: u32 = 0;
-    
-    unsafe {
-        if DEBUG_COUNTER < 10 {
-            DEBUG_COUNTER += 1;
-            if DEBUG_COUNTER == 1 {
-                info!("🔍 Level Manager Debug: Level {}, {} objectives loaded", 
-                    level_manager.current_level.unwrap_or(0),
-                    objective_manager.objectives.len());
-                
-                for (i, obj) in objective_manager.objectives.iter().enumerate() {
-                    info!("  Objective {}: '{}' ({:?}) - {}/{}", 
-                        i + 1, obj.title, obj.item_type, obj.current_count, obj.required_count);
-                }
-            }
-        }
-    }
-}
+
 
 // ===== PLUGIN =====
 
@@ -511,9 +439,7 @@ impl Plugin for LevelManagerPlugin {
                     update_objective_progress,
                     check_location_objectives,
                     check_defeat_objectives,
-                    debug_level_info,
                     check_next_level_transition,
-                    debug_event_system,
                 ).run_if(in_state(Screen::GamePlay)),
             )
             .add_systems(
