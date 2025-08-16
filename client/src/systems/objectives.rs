@@ -135,9 +135,7 @@ fn update_objective_ui(
         return; // Only update when objectives or progress changes
     }
     
-    // Log the current state for debugging
-    info!("🔄 Objectives UI update - Manager changed: {}, Progress changed: {}, Version: {}", 
-        needs_ui_rebuild, needs_progress_update, objective_manager.version);
+
 
     let Some(font_assets) = font_assets else { return; };
     let Some(ui_assets) = ui_assets else { return; };

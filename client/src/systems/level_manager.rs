@@ -280,7 +280,6 @@ fn load_level_objectives(
         
         // Force change detection by incrementing version
         objective_manager.version += 1;
-        info!("🔄 Initial objectives loaded, version set to: {}", objective_manager.version);
     }
 }
 
@@ -439,13 +438,7 @@ fn update_objective_progress(
 ) {
     let mut any_changes = false;
     
-    // Log current progress for debugging
-    info!("📊 Progress check - Coins: {}/5, Books: {}, Health: {}, Survival: {}", 
-        progress_tracker.coins_collected,
-        progress_tracker.books_collected,
-        progress_tracker.health_potions_collected,
-        progress_tracker.survival_kits_collected
-    );
+    
     
     // Update objectives based on progress tracker
     for objective in &mut objective_manager.objectives {
@@ -467,12 +460,11 @@ fn update_objective_progress(
         }
     }
     
-    // Force change detection if any objectives were updated
-    if any_changes {
-        // Increment version to trigger change detection
-        objective_manager.version += 1;
-        info!("🔄 Objective manager version updated to: {}", objective_manager.version);
-    }
+            // Force change detection if any objectives were updated
+        if any_changes {
+            // Increment version to trigger change detection
+            objective_manager.version += 1;
+        }
 }
 
 /// System to check location-based objectives
