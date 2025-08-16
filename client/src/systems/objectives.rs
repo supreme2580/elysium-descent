@@ -92,6 +92,7 @@ fn update_objective_ui(
     _objectives_ui_query: Query<Entity, With<ObjectiveUI>>,
     objectives_list_query: Query<Entity, (With<Node>, With<Name>)>,
     existing_slots: Query<Entity, With<ObjectiveSlot>>,
+    view_more_query: Query<Entity, With<Name>>,
     _children: Query<&Children>,
     names: Query<&Name>,
 ) {
@@ -118,23 +119,131 @@ fn update_objective_ui(
         return;
     };
 
-    // Clear existing objective slots
-    for slot_entity in existing_slots.iter() {
-        commands.entity(slot_entity).despawn();
+    // Check if we need to create the initial UI or just update existing slots
+    let existing_slots_count = existing_slots.iter().count();
+    let objectives_count = objective_manager.objectives.len();
+    
+    if existing_slots_count == 0 {
+        // Initial creation - create all objective slots and View More button
+        let font = font_assets.rajdhani_bold.clone();
+        let coin_image = ui_assets.coin.clone();
+
+        for objective in &objective_manager.objectives {
+            let slot_entity = commands.spawn(create_objective_slot(objective, font.clone(), coin_image.clone(), ui_assets.green_check_icon.clone())).id();
+            commands.entity(list_entity).add_child(slot_entity);
+        }
+
+        // Add "View More" button after objectives
+        let view_more_entity = commands.spawn(create_view_more_button(font.clone())).id();
+        commands.entity(list_entity).add_child(view_more_entity);
+    } else if existing_slots_count == objectives_count {
+        // Check if any objectives have changed progress
+        let mut needs_update = false;
+        for (slot_index, _slot_entity) in existing_slots.iter().enumerate() {
+            if let Some(_objective) = objective_manager.objectives.get(slot_index) {
+                // For now, always recreate to ensure UI updates
+                needs_update = true;
+                break;
+            }
+        }
+        
+        if needs_update {
+            // Clear existing objective slots
+            for slot_entity in existing_slots.iter() {
+                commands.entity(slot_entity).despawn();
+            }
+            
+            // Remove any existing View More buttons to prevent duplicates
+            for entity in view_more_query.iter() {
+                if let Ok(name) = names.get(entity) {
+                    if name.as_str() == "View More Button" {
+                        commands.entity(entity).despawn();
+                    }
+                }
+            }
+            
+            // Recreate all objective slots
+            let font = font_assets.rajdhani_bold.clone();
+            let coin_image = ui_assets.coin.clone();
+            
+            for objective in &objective_manager.objectives {
+                let slot_entity = commands.spawn(create_objective_slot(objective, font.clone(), coin_image.clone(), ui_assets.green_check_icon.clone())).id();
+                commands.entity(list_entity).add_child(slot_entity);
+            }
+            
+            // Add "View More" button after objectives
+            let view_more_entity = commands.spawn(create_view_more_button(font.clone())).id();
+            commands.entity(list_entity).add_child(view_more_entity);
+        } else {
+            // Update existing slots - just update the progress values
+            update_existing_objective_slots(
+                &mut commands,
+                &objective_manager,
+                &existing_slots,
+                &names,
+            );
+        }
+    } else {
+        // Count mismatch - recreate everything
+        // Clear existing objective slots
+        for slot_entity in existing_slots.iter() {
+            commands.entity(slot_entity).despawn();
+        }
+
+        // Remove any existing View More buttons to prevent duplicates
+        for entity in view_more_query.iter() {
+            if let Ok(name) = names.get(entity) {
+                if name.as_str() == "View More Button" {
+                    commands.entity(entity).despawn();
+                }
+            }
+        }
+
+        // Spawn new objective slots for each objective
+        let font = font_assets.rajdhani_bold.clone();
+        let coin_image = ui_assets.coin.clone();
+
+        for objective in &objective_manager.objectives {
+            let slot_entity = commands.spawn(create_objective_slot(objective, font.clone(), coin_image.clone(), ui_assets.green_check_icon.clone())).id();
+            commands.entity(list_entity).add_child(slot_entity);
+        }
+
+        // Add "View More" button after objectives
+        let view_more_entity = commands.spawn(create_view_more_button(font.clone())).id();
+        commands.entity(list_entity).add_child(view_more_entity);
     }
+}
 
-    // Spawn new objective slots for each objective
-    let font = font_assets.rajdhani_bold.clone();
-    let coin_image = ui_assets.coin.clone(); // Using coin as placeholder for all items
-
-    for objective in &objective_manager.objectives {
-        let slot_entity = commands.spawn(create_objective_slot(objective, font.clone(), coin_image.clone(), ui_assets.green_check_icon.clone())).id();
-        commands.entity(list_entity).add_child(slot_entity);
+/// Function to update existing objective slots without recreating the entire UI
+fn update_existing_objective_slots(
+    _commands: &mut Commands,
+    objective_manager: &ObjectiveManager,
+    existing_slots: &Query<Entity, With<ObjectiveSlot>>,
+    _names: &Query<&Name>,
+) {
+    info!("Updating {} existing objective slots with new progress values", existing_slots.iter().count());
+    
+    // For now, we'll use a simpler approach: just log the updates
+    // The UI will be updated on the next frame when the objectives system runs
+    for (slot_index, _slot_entity) in existing_slots.iter().enumerate() {
+        if let Some(objective) = objective_manager.objectives.get(slot_index) {
+            info!("📊 Objective {}: '{}' - Progress: {}/{} ({}%)", 
+                slot_index + 1,
+                objective.title,
+                objective.current_count,
+                objective.required_count,
+                if objective.required_count > 0 {
+                    (objective.current_count as f32 / objective.required_count as f32 * 100.0) as u32
+                } else {
+                    100
+                }
+            );
+        }
     }
-
-    // Add "View More" button after objectives
-    let view_more_entity = commands.spawn(create_view_more_button(font.clone())).id();
-    commands.entity(list_entity).add_child(view_more_entity);
+    
+    // TODO: Implement proper UI updates using Bevy's component system
+    // This would require adding specific components to track progress bars and text
+    // and then updating them directly through queries
 }
 
 fn create_objective_slot(

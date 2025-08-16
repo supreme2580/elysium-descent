@@ -45,7 +45,6 @@ fn main() -> AppExit {
         .add_plugins(assets::AssetsPlugin)
         .add_plugins(GameAudioPlugin)
         .add_plugins(SfxPlugin)
-        .add_event::<systems::dojo::pickup_item::PickupItemEvent>()
         .add_event::<systems::dojo::pickup_item::ItemPickedUpEvent>()
         .add_event::<systems::dojo::pickup_item::ItemPickupFailedEvent>()
         .add_plugins((screens::plugin, keybinding::plugin, /* dojo::plugin, */ ui::modal::ModalPlugin))
