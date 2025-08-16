@@ -494,16 +494,34 @@ fn check_location_objectives(
 }
 
 /// System to handle defeat objectives (monster defeats)
-/// This would need to be connected to the combat system
+/// MOCK IMPLEMENTATION: Auto-completes defeat objectives when all collect objectives are completed
 fn check_defeat_objectives(
     level_manager: Res<LevelManager>,
-    _objective_manager: ResMut<ObjectiveManager>,
+    mut objective_manager: ResMut<ObjectiveManager>,
 ) {
-    if let Some(level_data) = level_manager.get_current_level() {
-        for level_obj in &level_data.objectives {
-            if level_obj.objective_type == "defeat" {
-                // This would need to be connected to the combat system
-                // For now, this is a placeholder
+    if let Some(_level_data) = level_manager.get_current_level() {
+        // Check if all collect objectives are completed
+        let all_collect_completed = objective_manager.objectives.iter()
+            .filter(|obj| matches!(obj.objective_type, ObjectiveType::Collect(_, _)))
+            .all(|obj| obj.completed);
+        
+        // If all collect objectives are completed, auto-complete defeat objectives
+        if all_collect_completed {
+            let mut any_changes = false;
+            
+            for objective in &mut objective_manager.objectives {
+                if let ObjectiveType::Defeat(_) = &objective.objective_type {
+                    if !objective.completed {
+                        objective.completed = true;
+                        any_changes = true;
+                        info!("🎭 MOCK: Defeat objective '{}' auto-completed (all collect objectives finished)", objective.title);
+                    }
+                }
+            }
+            
+            // Force change detection if any objectives were updated
+            if any_changes {
+                objective_manager.version += 1;
             }
         }
     }
