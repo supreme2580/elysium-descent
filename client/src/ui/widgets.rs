@@ -242,6 +242,7 @@ pub fn player_hud_widget(
                                 ..default()
                             },
                             TextColor(Color::srgb(0.1, 0.1, 0.1)),
+                            crate::screens::gameplay::HudLevelText,
                         )]
                     )
                 ]

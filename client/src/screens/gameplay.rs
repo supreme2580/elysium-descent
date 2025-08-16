@@ -13,7 +13,7 @@ use crate::systems::character_controller::{
 };
 use crate::systems::book_interaction::BookInteractionPlugin;
 use crate::systems::collectibles::{CollectiblesPlugin, NavigationBasedSpawner, CollectibleSpawner, CoinStreamingManager};
-use crate::systems::level_manager::LevelManagerPlugin;
+use crate::systems::level_manager::{LevelManagerPlugin, LevelManager};
 use crate::systems::objectives::ObjectivesPlugin;
 use crate::ui::dialog::DialogPlugin;
 use crate::ui::inventory::spawn_inventory_ui;
@@ -21,6 +21,14 @@ use crate::ui::styles::ElysiumDescentColorPalette;
 use crate::ui::widgets::{HudPosition, player_hud_widget};
 use crate::ui::modal::despawn_modal;
 use bevy_enhanced_input::prelude::*;
+
+// ===== COMPONENTS =====
+
+#[derive(Component)]
+struct CurrentLevel(u32);
+
+#[derive(Component)]
+pub struct HudLevelText;
 
 // ===== PLUGIN SETUP =====
 
@@ -38,6 +46,7 @@ pub(super) fn plugin(app: &mut App) {
         Update,
         (
             camera_follow_player,
+            update_hud_level,
             // Fallback systems that run if preloaded entities weren't found
             fallback_spawn_environment,
             fallback_spawn_collectibles,
@@ -61,6 +70,32 @@ pub(super) fn plugin(app: &mut App) {
 
 fn set_gameplay_clear_color(mut commands: Commands) {
     commands.insert_resource(ClearColor(Color::srgb(0.529, 0.808, 0.922))); // Sky blue color
+}
+
+/// System to update the HUD level when the level manager changes
+fn update_hud_level(
+    level_manager: Res<LevelManager>,
+    mut hud_query: Query<&mut CurrentLevel, With<GameplayHud>>,
+    mut text_query: Query<&mut Text, (With<HudLevelText>, Without<CurrentLevel>)>,
+) {
+    if level_manager.is_changed() {
+        let new_level = level_manager.get_current_level()
+            .map(|level| level.level_id)
+            .unwrap_or(1);
+        
+        for mut current_level in hud_query.iter_mut() {
+            if current_level.0 != new_level {
+                current_level.0 = new_level;
+                info!("🎮 HUD level updated to: {}", new_level);
+                
+                // Update the text display
+                for mut text in text_query.iter_mut() {
+                    text.clear();
+                    text.push_str(&new_level.to_string());
+                }
+            }
+        }
+    }
 }
 
 fn debug_streaming_manager_state(streaming_manager: Res<CoinStreamingManager>) {
@@ -126,7 +161,7 @@ fn spawn_player_hud(
     // Example values, replace with actual player data
     let avatar = ui_assets.player_avatar.clone();
     let name = "0XJEHU";
-    let level = 2;
+    let level = 1; // Start with level 1
     let health = (105, 115);
     let xp = (80, 100);
     let font = font_assets.rajdhani_bold.clone();
@@ -134,6 +169,7 @@ fn spawn_player_hud(
     commands.spawn((
         player_hud_widget(avatar, name, level, health, xp, font, HudPosition::Left),
         GameplayHud,
+        CurrentLevel(level),
     ));
 }
 
