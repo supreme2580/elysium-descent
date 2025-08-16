@@ -505,10 +505,7 @@ impl Default for NavigationBasedSpawner {
 
 /// Component to mark items that are targets for reach_location objectives
 #[derive(Component)]
-pub struct ObjectiveTarget {
-    pub objective_id: String,
-    pub target_type: String,
-}
+pub struct ObjectiveTarget;
 
 /// System to spawn target items for reach_location objectives
 pub fn spawn_objective_targets(
@@ -554,10 +551,7 @@ pub fn spawn_objective_targets(
                         scale: Vec3::splat(1.0),
                         ..default()
                     },
-                    ObjectiveTarget {
-                        objective_id: level_obj.id.clone(),
-                        target_type: level_obj.target.clone(),
-                    },
+                    ObjectiveTarget,
                     Collectible,
                     CollectibleType::Book, // Default type for reach_location targets
                     FloatingItem {

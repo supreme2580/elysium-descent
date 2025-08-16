@@ -65,13 +65,7 @@ impl Objective {
         }
     }
 
-    // Helper method to get required count for collectible objectives
-    pub fn get_required_count(&self) -> u32 {
-        match &self.objective_type {
-            ObjectiveType::Collect(_, count) => *count,
-            _ => 0,
-        }
-    }
+
 }
 
 #[derive(Resource, Default)]

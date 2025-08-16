@@ -6,7 +6,6 @@ pub mod create_game;
 pub mod pickup_item;
 
 pub use create_game::CreateGameEvent;
-pub use pickup_item::PickupItemEvent;
 
 /// Resource to track overall Dojo system state
 #[derive(Resource, Debug, Default)]
