@@ -90,8 +90,7 @@ fn update_hud_level(
                 
                 // Update the text display
                 for mut text in text_query.iter_mut() {
-                    text.clear();
-                    text.push_str(&new_level.to_string());
+                    **text = new_level.to_string();
                 }
             }
         }

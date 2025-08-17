@@ -57,7 +57,7 @@
       "title": "Defeat the Guardian",
       "description": "Defeat the monster to prove your worth",
       "objective_type": "defeat",
-      "target": "monster_1",
+      "target": ["monster_1"],
       "reward": "guardian_essence"
     }
   ],

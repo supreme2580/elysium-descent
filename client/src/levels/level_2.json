@@ -70,7 +70,7 @@
       "title": "Defeat the Guardians",
       "description": "Defeat both monsters to prove your strength",
       "objective_type": "defeat",
-      "target": "monster_2,monster_3",
+      "target": ["monster_2", "monster_3"],
       "reward": "guardian_essence_enhanced"
     }
   ],

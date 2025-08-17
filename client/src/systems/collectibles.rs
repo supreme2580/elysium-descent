@@ -535,7 +535,7 @@ pub fn spawn_objective_targets(
                 let target_pos = Vec3::new(position.x, position.y, position.z);
                 
                 // Determine which model to use based on target type
-                let model_handle = match level_obj.target.as_str() {
+                let model_handle = match level_obj.target.as_single().unwrap_or("ancient_book") {
                     "ancient_book" => model_assets.book.clone(),
                     "mystery_box" => model_assets.mystery_box.clone(),
                     "power_crystal" => model_assets.book.clone(), // Use book as fallback for power crystal

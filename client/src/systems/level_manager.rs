@@ -43,11 +43,41 @@ pub struct LevelObjectiveData {
     pub title: String,
     pub description: String,
     pub objective_type: String,
-    pub target: String,
+    pub target: ObjectiveTarget,
     pub required_count: Option<u32>,
     pub position: Option<Position3D>,
     pub completion_radius: Option<f32>,
     pub reward: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ObjectiveTarget {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+impl ObjectiveTarget {
+    pub fn as_single(&self) -> Option<&str> {
+        match self {
+            ObjectiveTarget::Single(s) => Some(s),
+            ObjectiveTarget::Multiple(_) => None,
+        }
+    }
+
+    pub fn as_multiple(&self) -> Option<&Vec<String>> {
+        match self {
+            ObjectiveTarget::Single(_) => None,
+            ObjectiveTarget::Multiple(v) => Some(v),
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            ObjectiveTarget::Single(s) => s.clone(),
+            ObjectiveTarget::Multiple(v) => v.join(","),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,14 +164,127 @@ pub fn load_level_data() -> HashMap<u32, LevelData> {
     // Load level 1
     if let Ok(level_1_data) = serde_json::from_str::<LevelData>(include_str!("../levels/level_1.json")) {
         levels.insert(1, level_1_data);
+    } else {
+        error!("Failed to parse level_1.json");
     }
     
     // Load level 2
     if let Ok(level_2_data) = serde_json::from_str::<LevelData>(include_str!("../levels/level_2.json")) {
         levels.insert(2, level_2_data);
+    } else {
+        error!("Failed to parse level_2.json");
     }
     
     levels
+}
+
+// ===== HELPER FUNCTIONS =====
+
+/// Helper function to clear and reload objectives and coin data for a level
+/// This eliminates code duplication between load_level_objectives and handle_level_transitions
+fn reload_level_data(
+    level_data: &LevelData,
+    objective_manager: &mut ObjectiveManager,
+    coin_streaming_manager: &mut CoinStreamingManager,
+) {
+    info!("🎯 Loading objectives for level {}: {}", level_data.level_id, level_data.level_name);
+    
+    // Clear existing objectives
+    objective_manager.objectives.clear();
+    objective_manager.next_id = 0;
+    
+    // Clear existing coin positions
+    coin_streaming_manager.positions.clear();
+    coin_streaming_manager.spawned_coins.clear();
+    coin_streaming_manager.collected_positions.clear();
+    
+    // Load coin positions into streaming manager
+    for position in &level_data.coins.spawn_positions {
+        coin_streaming_manager.add_position(Vec3::new(
+            position.x,
+            position.y,
+            position.z,
+        ));
+    }
+    
+    // Convert level objectives to game objectives
+    for level_obj in level_data.objectives.iter() {
+        let objective_id = objective_manager.next_id;
+        
+        info!("📋 Processing objective: '{}' (type: {})", level_obj.title, level_obj.objective_type);
+        
+        let objective = match level_obj.objective_type.as_str() {
+            "collect" => {
+                // Determine collectible type based on objective target
+                let collectible_type = match level_obj.target.as_single().unwrap_or("coins") {
+                    "coins" => CollectibleType::Coin,
+                    "ancient_book" => CollectibleType::Book,
+                    "power_crystal" => CollectibleType::Book,
+                    _ => CollectibleType::Coin,
+                };
+                
+                let required_count = level_obj.required_count.unwrap_or(1);
+                info!("  📦 Creating collect objective: {:?} x{}", collectible_type, required_count);
+                Objective::new_collect(
+                    objective_id,
+                    level_obj.title.clone(),
+                    level_obj.description.clone(),
+                    collectible_type,
+                    required_count,
+                )
+            },
+            "reach_location" => {
+                if let Some(position) = &level_obj.position {
+                    let target_pos = Vec3::new(position.x, position.y, position.z);
+                    let radius = level_obj.completion_radius.unwrap_or(5.0);
+                    info!("  📍 Creating location objective: pos={:?}, radius={}", target_pos, radius);
+                    Objective::new_location(
+                        objective_id,
+                        level_obj.title.clone(),
+                        level_obj.description.clone(),
+                        target_pos,
+                        radius,
+                    )
+                } else {
+                    // Fallback to collect objective if no position
+                    let collectible_type = CollectibleType::Book;
+                    let required_count = level_obj.required_count.unwrap_or(1);
+                    info!("  ⚠️  No position found, falling back to collect objective");
+                    Objective::new_collect(
+                        objective_id,
+                        level_obj.title.clone(),
+                        level_obj.description.clone(),
+                        collectible_type,
+                        required_count,
+                    )
+                }
+            },
+            "defeat" => {
+                info!("  ⚔️  Creating defeat objective: {:?}", level_obj.target);
+                Objective::new_defeat(
+                    objective_id,
+                    level_obj.title.clone(),
+                    level_obj.description.clone(),
+                    level_obj.target.to_string(),
+                )
+            },
+            _ => {
+                // Default to collect objective
+                let collectible_type = CollectibleType::Coin;
+                let required_count = level_obj.required_count.unwrap_or(1);
+                info!("  🔄 Unknown objective type, defaulting to collect objective");
+                Objective::new_collect(
+                    objective_id,
+                    level_obj.title.clone(),
+                    level_obj.description.clone(),
+                    collectible_type,
+                    required_count,
+                )
+            }
+        };
+        
+        objective_manager.add_objective(objective);
+    }
 }
 
 // ===== SYSTEMS =====
@@ -174,112 +317,7 @@ fn load_level_objectives(
     mut coin_streaming_manager: ResMut<CoinStreamingManager>,
 ) {
     if let Some(level_data) = level_manager.get_current_level() {
-        info!("🎯 Loading objectives for level {}: {}", level_data.level_id, level_data.level_name);
-        
-        // Clear existing objectives
-        objective_manager.objectives.clear();
-        objective_manager.next_id = 0;
-        
-        // Clear existing coin positions
-        coin_streaming_manager.positions.clear();
-        coin_streaming_manager.spawned_coins.clear();
-        coin_streaming_manager.collected_positions.clear();
-        
-        // Load coin positions into streaming manager
-        for position in &level_data.coins.spawn_positions {
-            coin_streaming_manager.add_position(Vec3::new(
-                position.x,
-                position.y,
-                position.z,
-            ));
-        }
-        
-        // Convert level objectives to game objectives
-        for level_obj in level_data.objectives.iter() {
-            let objective_id = objective_manager.next_id;
-            
-            info!("📋 Processing objective: '{}' (type: {})", level_obj.title, level_obj.objective_type);
-            
-            let objective = match level_obj.objective_type.as_str() {
-                "collect" => {
-                    // Determine collectible type based on objective target
-                    let collectible_type = match level_obj.target.as_str() {
-                        "coins" => CollectibleType::Coin,
-                        "ancient_book" => CollectibleType::Book,
-                        "power_crystal" => CollectibleType::Book,
-                        _ => CollectibleType::Coin,
-                    };
-                    
-                    let required_count = level_obj.required_count.unwrap_or(1);
-                    info!("  📦 Creating collect objective: {:?} x{}", collectible_type, required_count);
-                    Objective::new_collect(
-                        objective_id,
-                        level_obj.title.clone(),
-                        level_obj.description.clone(),
-                        collectible_type,
-                        required_count,
-                    )
-                },
-                "reach_location" => {
-                    if let Some(position) = &level_obj.position {
-                        let target_pos = Vec3::new(position.x, position.y, position.z);
-                        let radius = level_obj.completion_radius.unwrap_or(5.0);
-                        info!("  📍 Creating location objective: pos={:?}, radius={}", target_pos, radius);
-                        Objective::new_location(
-                            objective_id,
-                            level_obj.title.clone(),
-                            level_obj.description.clone(),
-                            target_pos,
-                            radius,
-                        )
-                    } else {
-                        // Fallback to collect objective if no position
-                        let collectible_type = CollectibleType::Book;
-                        let required_count = level_obj.required_count.unwrap_or(1);
-                        info!("  ⚠️  No position found, falling back to collect objective");
-                        Objective::new_collect(
-                            objective_id,
-                            level_obj.title.clone(),
-                            level_obj.description.clone(),
-                            collectible_type,
-                            required_count,
-                        )
-                    }
-                },
-                "defeat" => {
-                    info!("  ⚔️  Creating defeat objective: {}", level_obj.target);
-                    Objective::new_defeat(
-                        objective_id,
-                        level_obj.title.clone(),
-                        level_obj.description.clone(),
-                        level_obj.target.clone(),
-                    )
-                },
-                _ => {
-                    // Default to collect objective
-                    let collectible_type = CollectibleType::Coin;
-                    let required_count = level_obj.required_count.unwrap_or(1);
-                    info!("  ❓ Unknown type, defaulting to collect objective");
-                    Objective::new_collect(
-                        objective_id,
-                        level_obj.title.clone(),
-                        level_obj.description.clone(),
-                        collectible_type,
-                        required_count,
-                    )
-                }
-            };
-            
-            objective_manager.add_objective(objective);
-        }
-        
-        info!("✅ Created {} objectives", objective_manager.objectives.len());
-        for (i, obj) in objective_manager.objectives.iter().enumerate() {
-            info!("  {}. '{}' - {:?} (completed: {})", i + 1, obj.title, obj.objective_type, obj.completed);
-        }
-        
-        // Force change detection by incrementing version
-        objective_manager.version += 1;
+        reload_level_data(level_data, &mut objective_manager, &mut coin_streaming_manager);
     }
 }
 
@@ -336,95 +374,7 @@ fn handle_level_transitions(
                 
                 // Reload objectives for the new level
                 if let Some(level_data) = level_manager.get_current_level() {
-                    // Clear existing objectives
-                    objective_manager.objectives.clear();
-                    objective_manager.next_id = 0;
-                    
-                    // Clear existing coin positions
-                    coin_streaming_manager.positions.clear();
-                    coin_streaming_manager.spawned_coins.clear();
-                    coin_streaming_manager.collected_positions.clear();
-                    
-                    // Load coin positions into streaming manager
-                    for position in &level_data.coins.spawn_positions {
-                        coin_streaming_manager.add_position(Vec3::new(
-                            position.x,
-                            position.y,
-                            position.z,
-                        ));
-                    }
-                    
-                    // Convert level objectives to game objectives
-                    for level_obj in level_data.objectives.iter() {
-                        let objective_id = objective_manager.next_id;
-                        
-                        let objective = match level_obj.objective_type.as_str() {
-                            "collect" => {
-                                // Determine collectible type based on objective target
-                                let collectible_type = match level_obj.target.as_str() {
-                                    "coins" => CollectibleType::Coin,
-                                    "ancient_book" => CollectibleType::Book,
-                                    "power_crystal" => CollectibleType::Book,
-                                    _ => CollectibleType::Coin,
-                                };
-                                
-                                let required_count = level_obj.required_count.unwrap_or(1);
-                                Objective::new_collect(
-                                    objective_id,
-                                    level_obj.title.clone(),
-                                    level_obj.description.clone(),
-                                    collectible_type,
-                                    required_count,
-                                )
-                            },
-                            "reach_location" => {
-                                if let Some(position) = &level_obj.position {
-                                    let target_pos = Vec3::new(position.x, position.y, position.z);
-                                    let radius = level_obj.completion_radius.unwrap_or(5.0);
-                                    Objective::new_location(
-                                        objective_id,
-                                        level_obj.title.clone(),
-                                        level_obj.description.clone(),
-                                        target_pos,
-                                        radius,
-                                    )
-                                } else {
-                                    // Fallback to collect objective if no position
-                                    let collectible_type = CollectibleType::Book;
-                                    let required_count = level_obj.required_count.unwrap_or(1);
-                                    Objective::new_collect(
-                                        objective_id,
-                                        level_obj.title.clone(),
-                                        level_obj.description.clone(),
-                                        collectible_type,
-                                        required_count,
-                                    )
-                                }
-                            },
-                            "defeat" => {
-                                Objective::new_defeat(
-                                    objective_id,
-                                    level_obj.title.clone(),
-                                    level_obj.description.clone(),
-                                    level_obj.target.clone(),
-                                )
-                            },
-                            _ => {
-                                // Default to collect objective
-                                let collectible_type = CollectibleType::Coin;
-                                let required_count = level_obj.required_count.unwrap_or(1);
-                                Objective::new_collect(
-                                    objective_id,
-                                    level_obj.title.clone(),
-                                    level_obj.description.clone(),
-                                    collectible_type,
-                                    required_count,
-                                )
-                            }
-                        };
-                        
-                        objective_manager.add_objective(objective);
-                    }
+                    reload_level_data(level_data, &mut objective_manager, &mut coin_streaming_manager);
                 }
             }
         }
