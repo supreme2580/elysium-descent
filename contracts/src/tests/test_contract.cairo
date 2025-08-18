@@ -38,7 +38,7 @@ mod test_contract {
                 last_active: 1234567890,
                 total_games_played: 0,
                 total_score: 0,
-                highest_level_reached: 0,
+                highest_level_reached: 1,
                 is_active: true,
             }
         }

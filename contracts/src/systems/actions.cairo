@@ -332,7 +332,7 @@ pub mod actions {
                 last_active: current_time,
                 total_games_played: 0,
                 total_score: 0,
-                highest_level_reached: 0,
+                highest_level_reached: 1,
                 is_active: true,
             };
             world.write_model(@profile);
@@ -424,7 +424,7 @@ pub mod actions {
                 game_id,
                 player,
                 status: GameStatus::InProgress,
-                current_level: 0,
+                current_level: 1,
                 created_at: current_time,
                 score: 0,
                 player_type: profile.player_type,
