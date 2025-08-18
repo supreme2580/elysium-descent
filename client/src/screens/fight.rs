@@ -1,7 +1,7 @@
 use super::{Screen, despawn_scene};
 use crate::assets::ModelAssets;
 use crate::systems::character_controller::CharacterControllerBundle;
-use crate::systems::enemy_ai::{EnemyBundle, EnemyAIPlugin};
+use crate::systems::enemy_ai::EnemyBundle;
 use avian3d::prelude::{
     ColliderConstructor, ColliderConstructorHierarchy, Friction, GravityScale,
     Restitution, RigidBody, CollisionEventsEnabled,
@@ -22,8 +22,7 @@ pub(super) fn plugin(app: &mut App) {
         .add_systems(
             Update,
             camera_follow_fight_player.run_if(in_state(Screen::FightScene)),
-        )
-        .add_plugins(EnemyAIPlugin);
+        );
 }
 
 // ===== SYSTEMS =====

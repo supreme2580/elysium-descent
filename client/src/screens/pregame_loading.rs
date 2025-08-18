@@ -351,6 +351,7 @@ fn spawn_collectibles_system(
     mut loading_progress: ResMut<LoadingProgress>,
     spatial_query: SpatialQuery,
     time: Res<Time>,
+    boundary_constraint: Option<Res<crate::systems::boundary::BoundaryConstraint>>,
 ) {
     if !loading_progress.collectibles_spawned 
         && loading_progress.should_load_stage(3, time.elapsed_secs()) {
@@ -393,6 +394,19 @@ fn spawn_collectibles_system(
                     base_pos.y.max(1.5), // Ensure above ground
                     base_pos.z + offset_z,
                 );
+
+                // Check boundary constraints
+                let mut within_bounds = true;
+                if let Some(constraint) = &boundary_constraint {
+                    within_bounds = coin_pos.x >= constraint.min_x 
+                        && coin_pos.x <= constraint.max_x 
+                        && coin_pos.z >= constraint.min_z 
+                        && coin_pos.z <= constraint.max_z;
+                }
+
+                if !within_bounds {
+                    continue;
+                }
 
                 // Check minimum distance from other coins
                 let too_close = spawned_positions.iter().any(|&other_pos: &Vec3| {

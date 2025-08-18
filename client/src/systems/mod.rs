@@ -5,3 +5,4 @@ pub mod collectibles_config;
 pub mod dojo;
 pub mod enemy_ai;
 pub mod objectives;
+pub mod boundary;
