@@ -339,6 +339,26 @@ pub struct GameProgress {
     pub is_level_completed: bool,
 }
 
+// Session-based progress tracking for each level attempt
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct SessionProgress {
+    #[key]
+    pub game_id: u32,
+    #[key]
+    pub level: u32,
+    pub session_started_at: u64,
+    pub coins_collected: u32,
+    pub beasts_defeated: u32,
+    pub objectives_completed: u32,
+    pub health_potions_found: u32,
+    pub survival_kits_found: u32,
+    pub books_found: u32,
+    pub beast_essences_found: u32,
+    pub ancient_knowledge_found: u32,
+    pub is_session_active: bool,
+}
+
 // Admin Management
 #[derive(Copy, Drop, Serde)]
 #[dojo::model]

@@ -1,7 +1,7 @@
 use elysium_descent::models::{
     Admin, BeastType, Game, GameCounter, GameProgress, GameStatus, ItemType, Level, LevelBeast,
     LevelCoins, LevelCounter, LevelEnvironment, LevelItems, LevelObjective, ObjectiveType,
-    PlayerInventory, PlayerProfile, PlayerStats, PlayerType, WorldItem, GAME_COUNTER_ID, LEVEL_COUNTER_ID,
+    PlayerInventory, PlayerProfile, PlayerStats, PlayerType, SessionProgress, WorldItem, GAME_COUNTER_ID, LEVEL_COUNTER_ID,
 };
 use starknet::{ContractAddress, get_block_timestamp};
 
@@ -58,6 +58,12 @@ pub trait IActions<T> {
     fn defeat_beast(ref self: T, game_id: u32, level: u32, beast_id: felt252);
     fn complete_objective(ref self: T, game_id: u32, level: u32, objective_id: felt252);
     
+    // Session-based Actions
+    fn pickup_coin_session(ref self: T, game_id: u32, level: u32, coin_index: u32) -> bool;
+    fn get_session_progress(self: @T, game_id: u32, level: u32) -> SessionProgress;
+    fn reset_session(ref self: T, game_id: u32, level: u32);
+    fn finalize_session(ref self: T, game_id: u32, level: u32, success: bool);
+    
     // Player Stats & Inventory
     fn get_player_stats(self: @T, player: ContractAddress) -> PlayerStats;
     fn get_player_inventory(self: @T, player: ContractAddress) -> PlayerInventory;
@@ -87,7 +93,7 @@ pub mod actions {
     use super::{
         Admin, BeastType, Game, GameCounter, GameProgress, GameStatus, IActions, ItemType, Level,
         LevelBeast, LevelCoins, LevelCounter, LevelEnvironment, LevelItems, LevelObjective,
-        ObjectiveType, PlayerInventory, PlayerProfile, PlayerStats, PlayerType, WorldItem,
+        ObjectiveType, PlayerInventory, PlayerProfile, PlayerStats, PlayerType, SessionProgress, WorldItem,
         GAME_COUNTER_ID, LEVEL_COUNTER_ID, get_block_timestamp,
     };
 
@@ -180,6 +186,33 @@ pub mod actions {
         pub level: u32,
         pub coin_index: u32,
         pub collected_at: u64,
+        pub session_coins: u32,
+        pub total_coins: u32,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct SessionReset {
+        #[key]
+        pub player: ContractAddress,
+        pub game_id: u32,
+        pub level: u32,
+        pub reset_at: u64,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct SessionFinalized {
+        #[key]
+        pub player: ContractAddress,
+        pub game_id: u32,
+        pub level: u32,
+        pub finalized_at: u64,
+        pub success: bool,
+        pub coins_collected: u32,
+        pub beasts_defeated: u32,
+        pub objectives_completed: u32,
+        pub message: felt252,
     }
 
     #[derive(Copy, Drop, Serde)]
@@ -802,6 +835,8 @@ pub mod actions {
                 level,
                 coin_index,
                 collected_at: current_time,
+                session_coins: 0, // No session data for this event
+                total_coins: game_progress.coins_collected,
             });
         }
 
@@ -868,6 +903,167 @@ pub mod actions {
                 objective_id,
                 completed_at: current_time,
             });
+        }
+
+                // Session-based coin pickup function
+        fn pickup_coin_session(ref self: ContractState, game_id: u32, level: u32, coin_index: u32) -> bool {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+            let current_time = get_block_timestamp();
+
+            // Verify game exists and player owns it
+            let game: Game = world.read_model(game_id);
+            assert(game.player == player, 'Not your game');
+            assert(game.status == GameStatus::InProgress, 'Game not in progress');
+            assert(game.current_level == level, 'Not current level');
+
+            // Get or create session progress for this level attempt
+            let mut session_progress: SessionProgress = world.read_model((game_id, level));
+            if !session_progress.is_session_active {
+                // Start new session
+                session_progress = SessionProgress {
+                    game_id,
+                    level,
+                    session_started_at: current_time,
+                    coins_collected: 0,
+                    beasts_defeated: 0,
+                    objectives_completed: 0,
+                    health_potions_found: 0,
+                    survival_kits_found: 0,
+                    books_found: 0,
+                    beast_essences_found: 0,
+                    ancient_knowledge_found: 0,
+                    is_session_active: true,
+                };
+            }
+
+            // Update session progress - add coin
+            session_progress.coins_collected += 1;
+            world.write_model(@session_progress);
+
+            // Update permanent game progress
+            let mut game_progress: GameProgress = world.read_model((game_id, level));
+            game_progress.coins_collected += 1;
+            world.write_model(@game_progress);
+
+            // Update permanent player inventory
+            let mut inventory: PlayerInventory = world.read_model(player);
+            inventory.coins += 1;
+            world.write_model(@inventory);
+
+            // Emit event for coin collection
+            world.emit_event(@CoinCollected {
+                player,
+                game_id,
+                level,
+                coin_index,
+                collected_at: current_time,
+                session_coins: session_progress.coins_collected,
+                total_coins: game_progress.coins_collected,
+            });
+
+            true
+        }
+
+        // Get current session progress
+        fn get_session_progress(self: @ContractState, game_id: u32, level: u32) -> SessionProgress {
+            let world = self.world_default();
+            world.read_model((game_id, level))
+        }
+
+        // Reset session for a new level attempt
+        fn reset_session(ref self: ContractState, game_id: u32, level: u32) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+            let current_time = get_block_timestamp();
+
+            // Verify game exists and player owns it
+            let game: Game = world.read_model(game_id);
+            assert(game.player == player, 'Not your game');
+            assert(game.status == GameStatus::InProgress, 'Game not in progress');
+
+            // Reset session progress for fresh attempt
+            let session_progress = SessionProgress {
+                game_id,
+                level,
+                session_started_at: current_time,
+                coins_collected: 0,
+                beasts_defeated: 0,
+                objectives_completed: 0,
+                health_potions_found: 0,
+                survival_kits_found: 0,
+                books_found: 0,
+                beast_essences_found: 0,
+                ancient_knowledge_found: 0,
+                is_session_active: true,
+            };
+            world.write_model(@session_progress);
+
+            // Emit session reset event
+            world.emit_event(@SessionReset {
+                player,
+                game_id,
+                level,
+                reset_at: current_time,
+            });
+        }
+
+        // Finalize session and decide what to keep
+        fn finalize_session(ref self: ContractState, game_id: u32, level: u32, success: bool) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+            let current_time = get_block_timestamp();
+
+            // Verify game exists and player owns it
+            let game: Game = world.read_model(game_id);
+            assert(game.player == player, 'Not your game');
+            assert(game.status == GameStatus::InProgress, 'Game not in progress');
+
+            // Get session progress
+            let mut session_progress: SessionProgress = world.read_model((game_id, level));
+
+            if success {
+                // Level completed successfully - keep all session progress
+                // Update permanent game progress with session totals
+                let mut game_progress: GameProgress = world.read_model((game_id, level));
+                game_progress.coins_collected = session_progress.coins_collected;
+                game_progress.beasts_defeated = session_progress.beasts_defeated;
+                game_progress.objectives_completed = session_progress.objectives_completed;
+                world.write_model(@game_progress);
+
+                // Mark session as completed
+                session_progress.is_session_active = false;
+                world.write_model(@session_progress);
+
+                world.emit_event(@SessionFinalized {
+                    player,
+                    game_id,
+                    level,
+                    finalized_at: current_time,
+                    success: true,
+                    coins_collected: session_progress.coins_collected,
+                    beasts_defeated: session_progress.beasts_defeated,
+                    objectives_completed: session_progress.objectives_completed,
+                    message: 'Success',
+                });
+            } else {
+                // Level failed - reset session but keep permanent inventory
+                // Session progress is lost, but coins in inventory remain
+                session_progress.is_session_active = false;
+                world.write_model(@session_progress);
+
+                world.emit_event(@SessionFinalized {
+                    player,
+                    game_id,
+                    level,
+                    finalized_at: current_time,
+                    success: false,
+                    coins_collected: session_progress.coins_collected,
+                    beasts_defeated: session_progress.beasts_defeated,
+                    objectives_completed: session_progress.objectives_completed,
+                    message: 'Failed',
+                });
+            }
         }
 
         // Player Stats & Inventory
