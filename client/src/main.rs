@@ -34,7 +34,7 @@ fn main() -> AppExit {
             }),
             ..default()
         }))
-        .add_systems(Startup, setup_camera)
+        .add_systems(Startup, (setup_camera, setup_global_lighting))
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.1))) // Dark background initially
         .add_plugins(UiLunexPlugins)
         .add_plugins(AudioPlugin)
@@ -57,11 +57,30 @@ fn setup_camera(mut commands: Commands) {
         Camera2d::default(),
         Camera {
             order: 0,
-            ..default()
+            viewport: None,
+            is_active: true,
+            computed: Default::default(),
+            target: Default::default(),
+            hdr: false,
+            output_mode: Default::default(),
+            msaa_writeback: Default::default(),
+            clear_color: Default::default(),
+            sub_camera_view: None,
         },
         RenderLayers::from_layers(&[0, 1]),
         UiSourceCamera::<0>,
         Transform::from_translation(Vec3::Z * 1000.0),
         Name::new("UI Camera"),
     ));
+}
+
+fn setup_global_lighting(mut commands: Commands) {
+    // Set up global lighting configuration for warmer, more realistic lighting
+    // This creates a foundation of warm, golden ambient light that fills the entire scene
+    // with a natural, atmospheric glow instead of harsh, cold lighting
+    commands.insert_resource(AmbientLight {
+        color: Color::srgb(0.8, 0.7, 0.6), // Warm, golden ambient light
+        brightness: 0.3, // Reduced brightness for more natural look
+        affects_lightmapped_meshes: false,
+    });
 }

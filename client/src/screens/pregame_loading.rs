@@ -274,9 +274,9 @@ fn spawn_environment_system(
 
             // Set up ambient light
             commands.insert_resource(AmbientLight {
-                color: Color::srgb_u8(68, 71, 88),
-                brightness: 120.0,
-                ..default()
+                color: Color::srgb(0.8, 0.7, 0.6), // Warm, golden ambient light
+                brightness: 0.3, // Reduced brightness for more natural look
+                affects_lightmapped_meshes: false,
             });
 
             // Environment

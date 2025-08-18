@@ -240,7 +240,7 @@ impl PlayingScene {
         commands.spawn((
             Name::new("Directional Light"),
             DirectionalLight {
-                illuminance: 80_000.0,
+                illuminance: 15_000.0, // Reduced from 80_000 for softer lighting
                 shadows_enabled: true,
                 ..default()
             },
@@ -250,6 +250,53 @@ impl PlayingScene {
                 std::f32::consts::FRAC_PI_4,
                 0.0,
             )),
+            PlayingScene,
+        ));
+
+        // Add a second, softer directional light for fill lighting
+        commands.spawn((
+            Name::new("Fill Light"),
+            DirectionalLight {
+                illuminance: 5_000.0, // Much softer fill light
+                shadows_enabled: false, // No shadows for fill light
+                ..default()
+            },
+            Transform::from_rotation(Quat::from_euler(
+                EulerRot::XYZ,
+                -std::f32::consts::FRAC_PI_6, // Different angle
+                std::f32::consts::FRAC_PI_2, // Different angle
+                0.0,
+            )),
+            PlayingScene,
+        ));
+
+        // Add a warm point light for atmospheric lighting
+        commands.spawn((
+            Name::new("Atmospheric Point Light"),
+            PointLight {
+                color: Color::srgb(1.0, 0.9, 0.7), // Warm, golden light
+                intensity: 800.0, // Moderate intensity
+                range: 15.0, // Good range for atmospheric lighting
+                radius: 0.5,
+                shadows_enabled: false, // No shadows for point light to avoid performance issues
+                ..default()
+            },
+            Transform::from_xyz(0.0, 8.0, 0.0), // Position above the scene
+            PlayingScene,
+        ));
+
+        // Add a subtle rim light for depth
+        commands.spawn((
+            Name::new("Rim Light"),
+            PointLight {
+                color: Color::srgb(0.7, 0.8, 1.0), // Slight blue tint for contrast
+                intensity: 300.0, // Very subtle
+                range: 20.0, // Wide range for subtle effect
+                radius: 1.0,
+                shadows_enabled: false,
+                ..default()
+            },
+            Transform::from_xyz(-15.0, 5.0, 0.0), // Position to the side
             PlayingScene,
         ));
 
@@ -351,9 +398,9 @@ fn fallback_spawn_environment(
         
         // Set up ambient light
         commands.insert_resource(AmbientLight {
-            color: Color::srgb_u8(68, 71, 88),
-            brightness: 120.0,
-            ..default()
+            color: Color::srgb(0.8, 0.7, 0.6), // Warm, golden ambient light
+            brightness: 0.3, // Reduced brightness for more natural look
+            affects_lightmapped_meshes: false,
         });
 
         // Environment
