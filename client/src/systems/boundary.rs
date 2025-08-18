@@ -25,7 +25,6 @@
 
 use bevy::prelude::*;
 use avian3d::prelude::*;
-use bevy::math::primitives::Cuboid;
 // Mesh3d and MeshMaterial3d are re-exported in prelude in Bevy 0.16
 use crate::constants::boundary::BoundaryConstants;
 
@@ -85,8 +84,6 @@ impl Plugin for BoundaryPlugin {
 /// Each wall has a collision box for physics but no visual representation.
 fn spawn_boundary_walls(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let constraint = BoundaryConstraint::default();
     
@@ -104,27 +101,6 @@ fn spawn_boundary_walls(
     let ground_y = -1.5; // environment ground offset
     let y_center = ground_y + (wall_height / 2.0);
     
-    // Create materials for each wall with transparency
-    let north_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(1.0, 0.0, 0.0, 0.0), // Red, fully transparent
-        ..Default::default()
-    });
-    
-    let south_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(1.0, 1.0, 0.0, 0.0), // Yellow, fully transparent
-        ..Default::default()
-    });
-    
-    let east_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.0, 1.0, 0.0, 0.0), // Green, fully transparent
-        ..Default::default()
-    });
-    
-    let west_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.0, 0.0, 1.0, 0.0), // Blue, fully transparent
-        ..Default::default()
-    });
-    
     // Spawn the boundary walls
     // North wall (positive Z) - spans the full width
     commands.spawn((
@@ -133,14 +109,7 @@ fn spawn_boundary_walls(
         Collider::cuboid(world_width / 2.0, wall_height / 2.0, wall_thickness / 2.0),
         Transform::from_xyz(BoundaryConstants::WORLD_CENTER_X, y_center, BoundaryConstants::WORLD_CENTER_Z + world_depth / 2.0),
         GlobalTransform::default(),
-    )).with_children(|c| {
-        c.spawn((
-            Mesh3d(meshes.add(Cuboid::new(world_width, wall_height, wall_thickness))),
-            MeshMaterial3d(north_material.clone()),
-            Transform::default(),
-            GlobalTransform::default(),
-        ));
-    });
+    ));
 
     // South wall (negative Z) - spans the full width
     commands.spawn((
@@ -149,14 +118,7 @@ fn spawn_boundary_walls(
         Collider::cuboid(world_width / 2.0, wall_height / 2.0, wall_thickness / 2.0),
         Transform::from_xyz(BoundaryConstants::WORLD_CENTER_X, y_center, BoundaryConstants::WORLD_CENTER_Z - world_depth / 2.0),
         GlobalTransform::default(),
-    )).with_children(|c| {
-        c.spawn((
-            Mesh3d(meshes.add(Cuboid::new(world_width, wall_height, wall_thickness))),
-            MeshMaterial3d(south_material.clone()),
-            Transform::default(),
-            GlobalTransform::default(),
-        ));
-    });
+    ));
 
     // East wall (positive X) - spans the full depth
     commands.spawn((
@@ -165,14 +127,7 @@ fn spawn_boundary_walls(
         Collider::cuboid(wall_thickness / 2.0, wall_height / 2.0, world_depth / 2.0),
         Transform::from_xyz(BoundaryConstants::WORLD_CENTER_X + world_width / 2.0, y_center, BoundaryConstants::WORLD_CENTER_Z),
         GlobalTransform::default(),
-    )).with_children(|c| {
-        c.spawn((
-            Mesh3d(meshes.add(Cuboid::new(wall_thickness, wall_height, world_depth))),
-            MeshMaterial3d(east_material.clone()),
-            Transform::default(),
-            GlobalTransform::default(),
-        ));
-    });
+    ));
 
     // West wall (negative X) - spans the full depth
     commands.spawn((
@@ -181,14 +136,7 @@ fn spawn_boundary_walls(
         Collider::cuboid(wall_thickness / 2.0, wall_height / 2.0, world_depth / 2.0),
         Transform::from_xyz(BoundaryConstants::WORLD_CENTER_X - world_width / 2.0, y_center, BoundaryConstants::WORLD_CENTER_Z),
         GlobalTransform::default(),
-    )).with_children(|c| {
-        c.spawn((
-            Mesh3d(meshes.add(Cuboid::new(wall_thickness, wall_height, world_depth))),
-            MeshMaterial3d(west_material.clone()),
-            Transform::default(),
-            GlobalTransform::default(),
-        ));
-    });
+    ));
 
     // Safety floor to prevent falling through gaps
     let floor_thickness = 1.0;
