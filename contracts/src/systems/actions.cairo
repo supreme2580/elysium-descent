@@ -1,20 +1,73 @@
 use elysium_descent::models::{
-    GAME_COUNTER_ID, Game, GameCounter, GameStatus, ItemType, LevelItems, PlayerInventory,
-    PlayerStats, WorldItem,
+    Admin, BeastType, Game, GameCounter, GameProgress, GameStatus, ItemType, Level, LevelBeast,
+    LevelCoins, LevelCounter, LevelEnvironment, LevelItems, LevelObjective, ObjectiveType,
+    PlayerInventory, PlayerProfile, PlayerStats, PlayerType, WorldItem, GAME_COUNTER_ID, LEVEL_COUNTER_ID,
 };
 use starknet::{ContractAddress, get_block_timestamp};
 
 // define the interface
 #[starknet::interface]
 pub trait IActions<T> {
+    // Player Profile Management
+    fn create_player_profile(ref self: T, username: felt252, player_type: PlayerType);
+    fn update_player_profile(ref self: T, username: felt252, player_type: PlayerType);
+    fn get_player_profile(self: @T, player: ContractAddress) -> PlayerProfile;
+    
+    // Game Management
     fn create_game(ref self: T) -> u32;
     fn start_level(ref self: T, game_id: u32, level: u32);
-    fn pickup_item(ref self: T) -> bool;
+    fn complete_level(ref self: T, game_id: u32, level: u32);
+    fn get_game(self: @T, game_id: u32) -> Game;
+    fn get_game_progress(self: @T, game_id: u32, level: u32) -> GameProgress;
+    
+    // Level Management (Admin Only)
+    fn admin_create_level(
+        ref self: T,
+        level_name: felt252,
+        player_type: PlayerType,
+        next_level: u32,
+        coins_data: Array<felt252>,
+        beasts_data: Array<felt252>,
+        objectives_data: Array<felt252>,
+        environment_data: Array<felt252>
+    ) -> u32;
+    
+    fn admin_modify_level(
+        ref self: T,
+        level_id: u32,
+        level_name: felt252,
+        player_type: PlayerType,
+        next_level: u32,
+        coins_data: Array<felt252>,
+        beasts_data: Array<felt252>,
+        objectives_data: Array<felt252>,
+        environment_data: Array<felt252>
+    );
+    
+    fn admin_deactivate_level(ref self: T, level_id: u32);
+    fn admin_activate_level(ref self: T, level_id: u32);
+    fn get_level(self: @T, level_id: u32) -> Level;
+    fn get_level_coins(self: @T, level_id: u32) -> LevelCoins;
+    fn get_level_beasts(self: @T, level_id: u32) -> Array<LevelBeast>;
+    fn get_level_objectives(self: @T, level_id: u32) -> Array<LevelObjective>;
+    fn get_level_environment(self: @T, level_id: u32) -> LevelEnvironment;
+    
+    // Gameplay Actions
+    fn pickup_item(ref self: T, game_id: u32, item_id: u32) -> bool;
+    fn collect_coin(ref self: T, game_id: u32, level: u32, coin_index: u32);
+    fn defeat_beast(ref self: T, game_id: u32, level: u32, beast_id: felt252);
+    fn complete_objective(ref self: T, game_id: u32, level: u32, objective_id: felt252);
+    
+    // Player Stats & Inventory
     fn get_player_stats(self: @T, player: ContractAddress) -> PlayerStats;
     fn get_player_inventory(self: @T, player: ContractAddress) -> PlayerInventory;
     fn get_level_items(self: @T, game_id: u32, level: u32) -> LevelItems;
+    
+    // Admin Management
+    fn add_admin(ref self: T, admin_address: ContractAddress, role: felt252, permissions: u32);
+    fn remove_admin(ref self: T, admin_address: ContractAddress);
+    fn is_admin(self: @T, address: ContractAddress) -> bool;
 }
-//fn _pickup_item(ref self: T, game_id: u32, item_id: u32) -> bool;
 
 // dojo decorator
 #[dojo::contract]
@@ -24,9 +77,32 @@ pub mod actions {
     use dojo::model::ModelStorage;
     use starknet::{ContractAddress, get_caller_address};
     use super::{
-        GAME_COUNTER_ID, Game, GameCounter, GameStatus, IActions, ItemType, LevelItems,
-        PlayerInventory, PlayerStats, WorldItem, get_block_timestamp,
+        Admin, BeastType, Game, GameCounter, GameProgress, GameStatus, IActions, ItemType, Level,
+        LevelBeast, LevelCoins, LevelCounter, LevelEnvironment, LevelItems, LevelObjective,
+        ObjectiveType, PlayerInventory, PlayerProfile, PlayerStats, PlayerType, WorldItem,
+        GAME_COUNTER_ID, LEVEL_COUNTER_ID, get_block_timestamp,
     };
+
+    // Events
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct PlayerProfileCreated {
+        #[key]
+        pub player: ContractAddress,
+        pub username: felt252,
+        pub player_type: PlayerType,
+        pub created_at: u64,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct PlayerProfileUpdated {
+        #[key]
+        pub player: ContractAddress,
+        pub username: felt252,
+        pub player_type: PlayerType,
+        pub updated_at: u64,
+    }
 
     #[derive(Copy, Drop, Serde)]
     #[dojo::event]
@@ -44,55 +120,108 @@ pub mod actions {
         pub player: ContractAddress,
         pub game_id: u32,
         pub level: u32,
-        pub items_spawned: u32,
+        pub started_at: u64,
     }
 
     #[derive(Copy, Drop, Serde)]
     #[dojo::event]
-    pub struct ItemPickedUp {
+    pub struct LevelCompleted {
         #[key]
         pub player: ContractAddress,
         pub game_id: u32,
-        pub item_id: u32,
-        pub item_type: ItemType,
         pub level: u32,
+        pub completed_at: u64,
+        pub score: u32,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct LevelCreated {
+        #[key]
+        pub level_id: u32,
+        pub level_name: felt252,
+        pub player_type: PlayerType,
+        pub created_by: ContractAddress,
+        pub created_at: u64,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct LevelModified {
+        #[key]
+        pub level_id: u32,
+        pub modified_by: ContractAddress,
+        pub modified_at: u64,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct CoinCollected {
+        #[key]
+        pub player: ContractAddress,
+        pub game_id: u32,
+        pub level: u32,
+        pub coin_index: u32,
+        pub collected_at: u64,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct BeastDefeated {
+        #[key]
+        pub player: ContractAddress,
+        pub game_id: u32,
+        pub level: u32,
+        pub beast_id: felt252,
+        pub defeated_at: u64,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct ObjectiveCompleted {
+        #[key]
+        pub player: ContractAddress,
+        pub game_id: u32,
+        pub level: u32,
+        pub objective_id: felt252,
+        pub completed_at: u64,
     }
 
     #[abi(embed_v0)]
     impl ActionsImpl of IActions<ContractState> {
-        fn create_game(ref self: ContractState) -> u32 {
+        // Player Profile Management
+        fn create_player_profile(ref self: ContractState, username: felt252, player_type: PlayerType) {
             let mut world = self.world_default();
             let player = get_caller_address();
+            let current_time = get_block_timestamp();
 
-            // Get or initialize the game counter
-            let mut counter: GameCounter = world.read_model(GAME_COUNTER_ID);
+            // Check if player profile already exists
+            let profile_exists = self.player_profile_exists(world, player);
+            assert(!profile_exists, 'Player profile already exists');
 
-            // Always ensure the counter_id is set correctly (for new instances)
-            if counter.next_game_id == 0 {
-                counter.counter_id = GAME_COUNTER_ID; // ✅ CRITICAL: Set the key field!
-                counter.next_game_id = 1; // Initialize if first game
-            }
-
-            let game_id = counter.next_game_id;
-            counter.next_game_id += 1;
-
-            // Save updated counter
-            world.write_model(@counter);
-
-            // Create new game
-            let game = Game {
-                game_id,
+            let profile = PlayerProfile {
                 player,
-                status: GameStatus::InProgress,
-                current_level: 0, // Start at level 0, first level starts with start_level()
-                created_at: get_block_timestamp(),
-                score: 0,
+                username,
+                player_type,
+                created_at: current_time,
+                last_active: current_time,
+                total_games_played: 0,
+                total_score: 0,
+                highest_level_reached: 0,
+                is_active: true,
             };
-            world.write_model(@game);
+            world.write_model(@profile);
 
             // Initialize player stats
             let player_stats = PlayerStats {
-                player, health: 100, max_health: 100, level: 1, experience: 0, items_collected: 0,
+                player,
+                health: 100,
+                max_health: 100,
+                level: 1,
+                experience: 0,
+                items_collected: 0,
+                beasts_defeated: 0,
+                objectives_completed: 0,
             };
             world.write_model(@player_stats);
 
@@ -102,12 +231,92 @@ pub mod actions {
                 health_potions: 0,
                 survival_kits: 0,
                 books: 0,
-                capacity: 50 // Default inventory capacity
+                coins: 0,
+                beast_essences: 0,
+                ancient_knowledge: 0,
+                capacity: 50,
             };
             world.write_model(@inventory);
 
-            // Emit game created event
-            world.emit_event(@GameCreated { player, game_id, created_at: get_block_timestamp() });
+            world.emit_event(@PlayerProfileCreated {
+                player,
+                username,
+                player_type,
+                created_at: current_time,
+            });
+        }
+
+        fn update_player_profile(ref self: ContractState, username: felt252, player_type: PlayerType) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+            let current_time = get_block_timestamp();
+
+            let mut profile: PlayerProfile = world.read_model(player);
+            profile.username = username;
+            profile.player_type = player_type;
+            profile.last_active = current_time;
+            world.write_model(@profile);
+
+            world.emit_event(@PlayerProfileUpdated {
+                player,
+                username,
+                player_type,
+                updated_at: current_time,
+            });
+        }
+
+        fn get_player_profile(self: @ContractState, player: ContractAddress) -> PlayerProfile {
+            let world = self.world_default();
+            world.read_model(player)
+        }
+
+        // Game Management
+        fn create_game(ref self: ContractState) -> u32 {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+            let current_time = get_block_timestamp();
+
+            // Verify player profile exists
+            let profile_exists = self.player_profile_exists(world, player);
+            assert(profile_exists, 'Player profile does not exist');
+
+            // Get player profile to determine player type
+            let profile: PlayerProfile = world.read_model(player);
+
+            // Get or initialize the game counter
+            let mut counter: GameCounter = world.read_model(GAME_COUNTER_ID);
+            if counter.next_game_id == 0 {
+                counter.counter_id = GAME_COUNTER_ID;
+                counter.next_game_id = 1;
+            }
+
+            let game_id = counter.next_game_id;
+            counter.next_game_id += 1;
+            world.write_model(@counter);
+
+            // Create new game
+            let game = Game {
+                game_id,
+                player,
+                status: GameStatus::InProgress,
+                current_level: 0,
+                created_at: current_time,
+                score: 0,
+                player_type: profile.player_type,
+            };
+            world.write_model(@game);
+
+            // Update player profile
+            let mut player_profile: PlayerProfile = world.read_model(player);
+            player_profile.total_games_played += 1;
+            player_profile.last_active = current_time;
+            world.write_model(@player_profile);
+
+            world.emit_event(@GameCreated {
+                player,
+                game_id,
+                created_at: current_time,
+            });
 
             game_id
         }
@@ -115,179 +324,402 @@ pub mod actions {
         fn start_level(ref self: ContractState, game_id: u32, level: u32) {
             let mut world = self.world_default();
             let player = get_caller_address();
+            let current_time = get_block_timestamp();
 
             // Verify game exists and player owns it
             let mut game: Game = world.read_model(game_id);
             assert(game.player == player, 'Not your game');
             assert(game.status == GameStatus::InProgress, 'Game not in progress');
 
+            // Verify level exists and is active
+            let level_data: Level = world.read_model(level);
+            assert(level_data.is_active, 'Level is not active');
+            assert(level_data.player_type == game.player_type, 'Level not compatible');
+
             // Update game level
             game.current_level = level;
             world.write_model(@game);
 
-            // Generate items for this level based on level number
-            let health_potions_count = self.calculate_level_health_potions(level);
-            let survival_kits_count = self.calculate_level_survival_kits(level);
-            let books_count = self.calculate_level_books(level);
-
-            // Store level items metadata
-            let level_items = LevelItems {
+            // Initialize or update game progress for this level
+            let game_progress = GameProgress {
                 game_id,
                 level,
-                total_health_potions: health_potions_count,
-                total_survival_kits: survival_kits_count,
-                total_books: books_count,
-                collected_health_potions: 0,
-                collected_survival_kits: 0,
-                collected_books: 0,
+                coins_collected: 0,
+                beasts_defeated: 0,
+                objectives_completed: 0,
+                level_started_at: current_time,
+                level_completed_at: 0,
+                is_level_completed: false,
             };
-            world.write_model(@level_items);
+            world.write_model(@game_progress);
 
-            // Generate actual item instances in the world
-            let mut item_counter = 0_u32;
-
-            // Generate health potions
-            let mut i = 0_u32;
-            loop {
-                if i >= health_potions_count {
-                    break;
-                }
-                let item_id = self.generate_item_id(game_id, level, item_counter);
-                let (x, y) = self.generate_item_position(game_id, level, item_counter);
-
-                let world_item = WorldItem {
+            world.emit_event(@LevelStarted {
+                player,
                     game_id,
-                    item_id,
-                    item_type: ItemType::HealthPotion,
-                    x_position: x,
-                    y_position: y,
-                    is_collected: false,
                     level,
-                };
-                world.write_model(@world_item);
-
-                item_counter += 1;
-                i += 1;
-            };
-
-            // Generate survival kits
-            let mut i = 0_u32;
-            loop {
-                if i >= survival_kits_count {
-                    break;
-                }
-                let item_id = self.generate_item_id(game_id, level, item_counter);
-                let (x, y) = self.generate_item_position(game_id, level, item_counter);
-
-                let world_item = WorldItem {
-                    game_id,
-                    item_id,
-                    item_type: ItemType::SurvivalKit,
-                    x_position: x,
-                    y_position: y,
-                    is_collected: false,
-                    level,
-                };
-                world.write_model(@world_item);
-
-                item_counter += 1;
-                i += 1;
-            };
-
-            // Generate books
-            let mut i = 0_u32;
-            loop {
-                if i >= books_count {
-                    break;
-                }
-                let item_id = self.generate_item_id(game_id, level, item_counter);
-                let (x, y) = self.generate_item_position(game_id, level, item_counter);
-
-                let world_item = WorldItem {
-                    game_id,
-                    item_id,
-                    item_type: ItemType::Book,
-                    x_position: x,
-                    y_position: y,
-                    is_collected: false,
-                    level,
-                };
-                world.write_model(@world_item);
-
-                item_counter += 1;
-                i += 1;
-            };
-
-            let total_items = health_potions_count + survival_kits_count + books_count;
-            world.emit_event(@LevelStarted { player, game_id, level, items_spawned: total_items });
+                started_at: current_time,
+            });
         }
 
-        fn pickup_item(ref self: ContractState) -> bool {
+        fn complete_level(ref self: ContractState, game_id: u32, level: u32) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+            let current_time = get_block_timestamp();
+
+            // Verify game exists and player owns it
+            let mut game: Game = world.read_model(game_id);
+            assert(game.player == player, 'Not your game');
+            assert(game.status == GameStatus::InProgress, 'Game not in progress');
+
+            // Get game progress for this level
+            let mut game_progress: GameProgress = world.read_model((game_id, level));
+            assert(!game_progress.is_level_completed, 'Level already completed');
+
+            // Mark level as completed
+            game_progress.is_level_completed = true;
+            game_progress.level_completed_at = current_time;
+            world.write_model(@game_progress);
+
+            // Update game score and level
+            let level_score = self.calculate_level_score(game_progress);
+            game.score += level_score;
+            game.current_level = level + 1;
+            world.write_model(@game);
+
+            // Update player profile
+            let mut player_profile: PlayerProfile = world.read_model(player);
+            player_profile.total_score = player_profile.total_score + level_score.into();
+            if level > player_profile.highest_level_reached {
+                player_profile.highest_level_reached = level;
+            }
+            player_profile.last_active = current_time;
+            world.write_model(@player_profile);
+
+            world.emit_event(@LevelCompleted {
+                player,
+                    game_id,
+                    level,
+                completed_at: current_time,
+                score: level_score,
+            });
+        }
+
+        fn get_game(self: @ContractState, game_id: u32) -> Game {
+            let world = self.world_default();
+            world.read_model(game_id)
+        }
+
+        fn get_game_progress(self: @ContractState, game_id: u32, level: u32) -> GameProgress {
+            let world = self.world_default();
+            world.read_model((game_id, level))
+        }
+
+        // Level Management (Admin Only)
+        fn admin_create_level(
+            ref self: ContractState,
+            level_name: felt252,
+            player_type: PlayerType,
+            next_level: u32,
+            coins_data: Array<felt252>,
+            beasts_data: Array<felt252>,
+            objectives_data: Array<felt252>,
+            environment_data: Array<felt252>
+        ) -> u32 {
+            let caller = get_caller_address();
+            assert(self.is_admin(caller), 'Only admins can create levels');
+
+            let mut world = self.world_default();
+            let current_time = get_block_timestamp();
+
+            // Get or initialize level counter
+            let mut level_counter: LevelCounter = world.read_model(LEVEL_COUNTER_ID);
+            if level_counter.next_level_id == 0 {
+                level_counter.counter_id = LEVEL_COUNTER_ID;
+                level_counter.next_level_id = 1;
+            }
+
+            let level_id = level_counter.next_level_id;
+            level_counter.next_level_id += 1;
+            world.write_model(@level_counter);
+
+            // Create level
+            let level = Level {
+                level_id,
+                level_name,
+                player_type,
+                is_active: true,
+                created_at: current_time,
+                modified_at: current_time,
+                created_by: caller,
+                next_level,
+            };
+            world.write_model(@level);
+
+            // Parse and create coins data
+            self.create_level_coins(world, level_id, coins_data);
+
+            // Parse and create beasts data
+            self.create_level_beasts(world, level_id, beasts_data);
+
+            // Parse and create objectives data
+            self.create_level_objectives(world, level_id, objectives_data);
+
+            // Parse and create environment data
+            self.create_level_environment(world, level_id, environment_data);
+
+            world.emit_event(@LevelCreated {
+                level_id,
+                level_name,
+                player_type,
+                created_by: caller,
+                created_at: current_time,
+            });
+
+            level_id
+        }
+
+        fn admin_modify_level(
+            ref self: ContractState,
+            level_id: u32,
+            level_name: felt252,
+            player_type: PlayerType,
+            next_level: u32,
+            coins_data: Array<felt252>,
+            beasts_data: Array<felt252>,
+            objectives_data: Array<felt252>,
+            environment_data: Array<felt252>
+        ) {
+            let caller = get_caller_address();
+            assert(self.is_admin(caller), 'Only admins can modify levels');
+
+            let mut world = self.world_default();
+            let current_time = get_block_timestamp();
+
+            // Verify level exists
+            let mut level: Level = world.read_model(level_id);
+            level.level_name = level_name;
+            level.player_type = player_type;
+            level.next_level = next_level;
+            level.modified_at = current_time;
+            world.write_model(@level);
+
+            // Clear existing data and recreate
+            self.clear_level_data(world, level_id);
+
+            // Recreate with new data
+            self.create_level_coins(world, level_id, coins_data);
+            self.create_level_beasts(world, level_id, beasts_data);
+            self.create_level_objectives(world, level_id, objectives_data);
+            self.create_level_environment(world, level_id, environment_data);
+
+            world.emit_event(@LevelModified {
+                level_id,
+                modified_by: caller,
+                modified_at: current_time,
+            });
+        }
+
+        fn admin_deactivate_level(ref self: ContractState, level_id: u32) {
+            let caller = get_caller_address();
+            assert(self.is_admin(caller), 'Only admins can deactivate');
+
+            let mut world = self.world_default();
+            let mut level: Level = world.read_model(level_id);
+            level.is_active = false;
+            world.write_model(@level);
+        }
+
+        fn admin_activate_level(ref self: ContractState, level_id: u32) {
+            let caller = get_caller_address();
+            assert(self.is_admin(caller), 'Only admins can activate levels');
+
+            let mut world = self.world_default();
+            let mut level: Level = world.read_model(level_id);
+            level.is_active = true;
+            world.write_model(@level);
+        }
+
+        fn get_level(self: @ContractState, level_id: u32) -> Level {
+            let world = self.world_default();
+            world.read_model(level_id)
+        }
+
+        fn get_level_coins(self: @ContractState, level_id: u32) -> LevelCoins {
+            let world = self.world_default();
+            world.read_model(level_id)
+        }
+
+        fn get_level_beasts(self: @ContractState, level_id: u32) -> Array<LevelBeast> {
+            // This would need to be implemented with proper array handling
+            // For now, returning empty array
+            array![]
+        }
+
+        fn get_level_objectives(self: @ContractState, level_id: u32) -> Array<LevelObjective> {
+            // This would need to be implemented with proper array handling
+            // For now, returning empty array
+            array![]
+        }
+
+        fn get_level_environment(self: @ContractState, level_id: u32) -> LevelEnvironment {
+            let world = self.world_default();
+            world.read_model(level_id)
+        }
+
+        // Gameplay Actions
+        fn pickup_item(ref self: ContractState, game_id: u32, item_id: u32) -> bool {
             let mut world = self.world_default();
             let player = get_caller_address();
 
             // Verify game exists and player owns it
-            //let game: Game = world.read_model(game_id);
-            //assert(game.player == player, 'Not your game');
-            //assert(game.status == GameStatus::InProgress, 'Game not in progress');
+            let game: Game = world.read_model(game_id);
+            assert(game.player == player, 'Not your game');
+            assert(game.status == GameStatus::InProgress, 'Game not in progress');
 
-            //// Get the item
-            //let mut world_item: WorldItem = world.read_model((game_id, item_id));
-            //assert(!world_item.is_collected, 'Item already collected');
-            //assert(world_item.level == game.current_level, 'Item not in current level');
+            // Get the item
+            let mut world_item: WorldItem = world.read_model((game_id, item_id));
+            assert(!world_item.is_collected, 'Item already collected');
+            assert(world_item.level == game.current_level, 'Item not in current level');
 
-            //// Mark item as collected
-            //world_item.is_collected = true;
-            //world.write_model(@world_item);
+            // Mark item as collected
+            world_item.is_collected = true;
+            world.write_model(@world_item);
 
-            //// Update player inventory
-            //let mut inventory: PlayerInventory = world.read_model(player);
-            //match world_item.item_type {
-            //    ItemType::HealthPotion => { inventory.health_potions += 1; },
-            //    ItemType::SurvivalKit => { inventory.survival_kits += 1; },
-            //    ItemType::Book => { inventory.books += 1; },
-            //};
-            //world.write_model(@inventory);
+            // Update player inventory
+            let mut inventory: PlayerInventory = world.read_model(player);
+            match world_item.item_type {
+                ItemType::HealthPotion => { inventory.health_potions += 1; },
+                ItemType::SurvivalKit => { inventory.survival_kits += 1; },
+                ItemType::Book => { inventory.books += 1; },
+                ItemType::Coin => { inventory.coins += 1; },
+                ItemType::BeastEssence => { inventory.beast_essences += 1; },
+                ItemType::AncientKnowledge => { inventory.ancient_knowledge += 1; },
+            };
+            world.write_model(@inventory);
 
-            //// Update level items collected count
-            //let mut level_items: LevelItems = world.read_model((game_id, world_item.level));
-            //match world_item.item_type {
-            //    ItemType::HealthPotion => { level_items.collected_health_potions += 1; },
-            //    ItemType::SurvivalKit => { level_items.collected_survival_kits += 1; },
-            //    ItemType::Book => { level_items.collected_books += 1; },
-            //};
-            //world.write_model(@level_items);
+            // Update level items collected count
+            let mut level_items: LevelItems = world.read_model((game_id, world_item.level));
+            match world_item.item_type {
+                ItemType::HealthPotion => { level_items.collected_health_potions += 1; },
+                ItemType::SurvivalKit => { level_items.collected_survival_kits += 1; },
+                ItemType::Book => { level_items.collected_books += 1; },
+                _ => {},
+            };
+            world.write_model(@level_items);
 
-            //// Update player stats
-            //let mut player_stats: PlayerStats = world.read_model(player);
-            //player_stats.items_collected += 1;
-            //player_stats.experience += 10; // Give experience for collecting items
+            // Update player stats
+            let mut player_stats: PlayerStats = world.read_model(player);
+            player_stats.items_collected += 1;
+            player_stats.experience += 10;
 
-            //// Simple leveling: every 100 exp = level up
-            //let new_level = (player_stats.experience / 100) + 1;
-            //if new_level > player_stats.level {
-            //    player_stats.level = new_level;
-            //    player_stats.max_health += 10; // Increase max health on level up
-            //    player_stats.health = player_stats.max_health; // Full heal on level up
-            //}
+            // Simple leveling: every 100 exp = level up
+            let new_level = (player_stats.experience / 100) + 1;
+            if new_level > player_stats.level {
+                player_stats.level = new_level;
+                player_stats.max_health += 10;
+                player_stats.health = player_stats.max_health;
+            }
 
-            //world.write_model(@player_stats);
-
-            //// Emit pickup event
-            //world
-            //    .emit_event(
-            //        @ItemPickedUp {
-            //            player,
-            //            game_id,
-            //            item_id,
-            //            item_type: world_item.item_type,
-            //            level: world_item.level,
-            //        },
-            //    );
+            world.write_model(@player_stats);
 
             true
         }
 
+        fn collect_coin(ref self: ContractState, game_id: u32, level: u32, coin_index: u32) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+            let current_time = get_block_timestamp();
+
+            // Verify game exists and player owns it
+            let game: Game = world.read_model(game_id);
+            assert(game.player == player, 'Not your game');
+            assert(game.status == GameStatus::InProgress, 'Game not in progress');
+
+            // Update game progress
+            let mut game_progress: GameProgress = world.read_model((game_id, level));
+            game_progress.coins_collected += 1;
+            world.write_model(@game_progress);
+
+            // Update player inventory
+            let mut inventory: PlayerInventory = world.read_model(player);
+            inventory.coins += 1;
+            world.write_model(@inventory);
+
+            world.emit_event(@CoinCollected {
+                player,
+                game_id,
+                level,
+                coin_index,
+                collected_at: current_time,
+            });
+        }
+
+        fn defeat_beast(ref self: ContractState, game_id: u32, level: u32, beast_id: felt252) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+            let current_time = get_block_timestamp();
+
+            // Verify game exists and player owns it
+            let game: Game = world.read_model(game_id);
+            assert(game.player == player, 'Not your game');
+            assert(game.status == GameStatus::InProgress, 'Game not in progress');
+
+            // Update game progress
+            let mut game_progress: GameProgress = world.read_model((game_id, level));
+            game_progress.beasts_defeated += 1;
+            world.write_model(@game_progress);
+
+            // Update player stats
+            let mut player_stats: PlayerStats = world.read_model(player);
+            player_stats.beasts_defeated += 1;
+            player_stats.experience += 50;
+            world.write_model(@player_stats);
+
+            // Add beast essence to inventory
+            let mut inventory: PlayerInventory = world.read_model(player);
+            inventory.beast_essences += 1;
+            world.write_model(@inventory);
+
+            world.emit_event(@BeastDefeated {
+                player,
+                game_id,
+                level,
+                beast_id,
+                defeated_at: current_time,
+            });
+        }
+
+        fn complete_objective(ref self: ContractState, game_id: u32, level: u32, objective_id: felt252) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+            let current_time = get_block_timestamp();
+
+            // Verify game exists and player owns it
+            let game: Game = world.read_model(game_id);
+            assert(game.player == player, 'Not your game');
+            assert(game.status == GameStatus::InProgress, 'Game not in progress');
+
+            // Update game progress
+            let mut game_progress: GameProgress = world.read_model((game_id, level));
+            game_progress.objectives_completed += 1;
+            world.write_model(@game_progress);
+
+            // Update player stats
+            let mut player_stats: PlayerStats = world.read_model(player);
+            player_stats.objectives_completed += 1;
+            player_stats.experience += 100;
+            world.write_model(@player_stats);
+
+            world.emit_event(@ObjectiveCompleted {
+                player,
+                game_id,
+                level,
+                objective_id,
+                completed_at: current_time,
+            });
+        }
+
+        // Player Stats & Inventory
         fn get_player_stats(self: @ContractState, player: ContractAddress) -> PlayerStats {
             let world = self.world_default();
             world.read_model(player)
@@ -302,6 +734,38 @@ pub mod actions {
             let world = self.world_default();
             world.read_model((game_id, level))
         }
+
+        // Admin Management
+        fn add_admin(ref self: ContractState, admin_address: ContractAddress, role: felt252, permissions: u32) {
+            let caller = get_caller_address();
+            assert(self.is_admin(caller), 'Only admins can add');
+
+            let mut world = self.world_default();
+            let current_time = get_block_timestamp();
+
+            let admin = Admin {
+                admin_address,
+                role,
+                permissions,
+                added_at: current_time,
+            };
+            world.write_model(@admin);
+        }
+
+        fn remove_admin(ref self: ContractState, admin_address: ContractAddress) {
+            let caller = get_caller_address();
+            assert(self.is_admin(caller), 'Only admins can remove');
+
+            // Note: In a real implementation, you'd need to handle model deletion
+            // For now, this is a placeholder
+        }
+
+        fn is_admin(self: @ContractState, address: ContractAddress) -> bool {
+            // Check if the address is an admin
+            // This would need proper implementation based on your admin model
+            // For now, returning false as placeholder
+            false
+        }
     }
 
     #[generate_trait]
@@ -310,6 +774,152 @@ pub mod actions {
         /// can't be const.
         fn world_default(self: @ContractState) -> dojo::world::WorldStorage {
             self.world(@"elysium_001")
+        }
+
+        /// Check if player profile exists
+        fn player_profile_exists(self: @ContractState, world: dojo::world::WorldStorage, player: ContractAddress) -> bool {
+            // This would need proper implementation to check if model exists
+            // For now, returning false as placeholder
+            false
+        }
+
+        /// Calculate level score based on performance
+        fn calculate_level_score(self: @ContractState, game_progress: GameProgress) -> u32 {
+            let mut score = 0_u32;
+            
+            // Base score for completing level
+            score += 100;
+            
+            // Bonus for coins collected
+            score += game_progress.coins_collected * 10;
+            
+            // Bonus for beasts defeated
+            score += game_progress.beasts_defeated * 25;
+            
+            // Bonus for objectives completed
+            score += game_progress.objectives_completed * 50;
+            
+            score
+        }
+
+        /// Create level coins data
+        fn create_level_coins(
+            ref self: ContractState,
+            mut world: dojo::world::WorldStorage,
+            level_id: u32,
+            coins_data: Array<felt252>
+        ) {
+            // Simplified implementation - just create basic level coins
+            let level_coins = LevelCoins {
+                level_id,
+                spawn_count: 15,
+                total_collected: 0,
+            };
+            world.write_model(@level_coins);
+        }
+
+        /// Create level beasts data
+        fn create_level_beasts(
+            ref self: ContractState,
+            mut world: dojo::world::WorldStorage,
+            level_id: u32,
+            beasts_data: Array<felt252>
+        ) {
+            // Simplified implementation - just create basic beast
+            let beast = LevelBeast {
+                level_id,
+                beast_id: 'monster_1',
+                beast_type: BeastType::Monster,
+                x: 0,
+                y: 1,
+                z: 0,
+                health: 100,
+                damage: 25,
+                speed: 3,
+                is_defeated: false,
+            };
+            world.write_model(@beast);
+        }
+
+        /// Create level objectives data
+        fn create_level_objectives(
+            ref self: ContractState,
+            mut world: dojo::world::WorldStorage,
+            level_id: u32,
+            objectives_data: Array<felt252>
+        ) {
+            // Simplified implementation - just create basic objective
+            let objective = LevelObjective {
+                level_id,
+                objective_id: 'collect_coins',
+                title: 'Collect Ancient Coins',
+                description: 'Collect 5 coins to unlock',
+                objective_type: ObjectiveType::Collect,
+                target: 'coins',
+                required_count: 5,
+                current_count: 0,
+                reward: 'unlock_level_2',
+                is_completed: false,
+            };
+            world.write_model(@objective);
+        }
+
+        /// Create level environment data
+        fn create_level_environment(
+            ref self: ContractState,
+            mut world: dojo::world::WorldStorage,
+            level_id: u32,
+            environment_data: Array<felt252>
+        ) {
+            // Simplified implementation - just create basic environment
+            let environment = LevelEnvironment {
+                level_id,
+                dungeon_scale: 7,
+                dungeon_x: 0,
+                dungeon_y: -1,
+                dungeon_z: 0,
+                dungeon_rotation: -1,
+            };
+            world.write_model(@environment);
+        }
+
+        /// Clear level data when modifying
+        fn clear_level_data(
+            ref self: ContractState,
+            world: dojo::world::WorldStorage,
+            level_id: u32
+        ) {
+            // Note: In a real implementation, you would need to implement proper deletion
+            // of all related models. This is a placeholder for the concept.
+            // You might need to track all created models and delete them systematically.
+        }
+
+        /// Parse beast type from felt252
+        fn parse_beast_type(self: @ContractState, beast_type_raw: felt252) -> BeastType {
+            let beast_type_u32: u32 = beast_type_raw.try_into().unwrap();
+            match beast_type_u32 {
+                0 => BeastType::Monster,
+                1 => BeastType::Dragon,
+                2 => BeastType::Goblin,
+                3 => BeastType::Orc,
+                4 => BeastType::Demon,
+                5 => BeastType::Undead,
+                6 => BeastType::Elemental,
+                _ => BeastType::Monster, // Default fallback
+            }
+        }
+
+        /// Parse objective type from felt252
+        fn parse_objective_type(self: @ContractState, objective_type_raw: felt252) -> ObjectiveType {
+            let objective_type_u32: u32 = objective_type_raw.try_into().unwrap();
+            match objective_type_u32 {
+                0 => ObjectiveType::Collect,
+                1 => ObjectiveType::ReachLocation,
+                2 => ObjectiveType::Defeat,
+                3 => ObjectiveType::Survive,
+                4 => ObjectiveType::Explore,
+                _ => ObjectiveType::Collect, // Default fallback
+            }
         }
 
         /// Calculate number of health potions for a level

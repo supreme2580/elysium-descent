@@ -8,11 +8,11 @@ edition = "2024_07"
 sierra-replace-ids = true
 
 [dependencies]
-dojo = { git = "https://github.com/dojoengine/dojo", tag = "v1.6.0-alpha.2" }
+dojo = { git = "https://github.com/dojoengine/dojo", tag = "v1.5.0" }
 starknet = "2.10.1"
 
 [dev-dependencies]
-dojo_cairo_test = { git = "https://github.com/dojoengine/dojo", tag = "v1.6.0-alpha.2" }
+dojo_cairo_test = { git = "https://github.com/dojoengine/dojo", tag = "v1.5.0" }
 cairo_test = "2.10.1"
 
 [[target.starknet-contract]]
