@@ -162,9 +162,9 @@ pub struct LevelBeast {
     #[key]
     pub beast_id: felt252,
     pub beast_type: BeastType,
-    pub x: felt252,
-    pub y: felt252,
-    pub z: felt252,
+    pub spawn_position_x: felt252,
+    pub spawn_position_y: felt252,
+    pub spawn_position_z: felt252,
     pub health: u32,
     pub damage: u32,
     pub speed: felt252,
@@ -187,6 +187,7 @@ pub struct LevelObjective {
     pub current_count: u32,
     pub reward: felt252,
     pub is_completed: bool,
+    pub objective_count: u32,
 }
 
 // Level Objective Positions (for location-based objectives)
@@ -210,9 +211,9 @@ pub struct LevelEnvironment {
     #[key]
     pub level_id: u32,
     pub dungeon_scale: felt252,
-    pub dungeon_x: felt252,
-    pub dungeon_y: felt252,
-    pub dungeon_z: felt252,
+    pub dungeon_position_x: felt252,
+    pub dungeon_position_y: felt252,
+    pub dungeon_position_z: felt252,
     pub dungeon_rotation: felt252,
 }
 

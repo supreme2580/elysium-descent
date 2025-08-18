@@ -1,7 +1,7 @@
 {
   "world": {
-    "class_hash": "0x4c60dc46a8ca8bb47675b7b914053cef769afbf0e340523187336b72bd71d1f",
-    "address": "0x1d3be0144b9a1d96f8ea55ad581c5a1ab2281837821c6e9c1aa6c37b35b7d5f",
+    "class_hash": "0x685ed02eefa98fe7e208aa295042e9bbad8029b0d3d6f0ba2b32546efe0a1f9",
+    "address": "0x2f3fd3e14a14bb1c98095c6f9c305b5660e41f6bbbf8f8dc8a52c6104fe5fa",
     "seed": "elysium_001",
     "name": "Dojo starter",
     "entrypoints": [
@@ -1328,8 +1328,8 @@
   },
   "contracts": [
     {
-      "address": "0x3e808dd3f605913362dd9acf16a9853eb824d1619c182b84199d7424464f670",
-      "class_hash": "0x5d98e4813136fb743de87bc7b7351fa37fcf4393f8a02755b96b16d9365c538",
+      "address": "0xff9c09b00be2e7d4fc6a0673136e2d21ea332f643a1aec3684bf66138e95f5",
+      "class_hash": "0x62d72517d1256ceb7ce709d7890bfa8e3c9021b9ba27f0302b276cf5d0d0c61",
       "abi": [
         {
           "type": "impl",
@@ -1388,6 +1388,28 @@
         },
         {
           "type": "enum",
+          "name": "elysium_descent::models::PlayerType",
+          "variants": [
+            {
+              "name": "Man",
+              "type": "()"
+            },
+            {
+              "name": "Woman",
+              "type": "()"
+            },
+            {
+              "name": "Beast",
+              "type": "()"
+            },
+            {
+              "name": "Spirit",
+              "type": "()"
+            }
+          ]
+        },
+        {
+          "type": "enum",
           "name": "core::bool",
           "variants": [
             {
@@ -1397,6 +1419,380 @@
             {
               "name": "True",
               "type": "()"
+            }
+          ]
+        },
+        {
+          "type": "struct",
+          "name": "elysium_descent::models::PlayerProfile",
+          "members": [
+            {
+              "name": "player",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "username",
+              "type": "core::felt252"
+            },
+            {
+              "name": "player_type",
+              "type": "elysium_descent::models::PlayerType"
+            },
+            {
+              "name": "created_at",
+              "type": "core::integer::u64"
+            },
+            {
+              "name": "last_active",
+              "type": "core::integer::u64"
+            },
+            {
+              "name": "total_games_played",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "total_score",
+              "type": "core::integer::u64"
+            },
+            {
+              "name": "highest_level_reached",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "is_active",
+              "type": "core::bool"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "name": "elysium_descent::models::GameStatus",
+          "variants": [
+            {
+              "name": "NotStarted",
+              "type": "()"
+            },
+            {
+              "name": "InProgress",
+              "type": "()"
+            },
+            {
+              "name": "Paused",
+              "type": "()"
+            },
+            {
+              "name": "Completed",
+              "type": "()"
+            }
+          ]
+        },
+        {
+          "type": "struct",
+          "name": "elysium_descent::models::Game",
+          "members": [
+            {
+              "name": "game_id",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "player",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "status",
+              "type": "elysium_descent::models::GameStatus"
+            },
+            {
+              "name": "current_level",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "created_at",
+              "type": "core::integer::u64"
+            },
+            {
+              "name": "score",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "player_type",
+              "type": "elysium_descent::models::PlayerType"
+            }
+          ]
+        },
+        {
+          "type": "struct",
+          "name": "elysium_descent::models::GameProgress",
+          "members": [
+            {
+              "name": "game_id",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "level",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "coins_collected",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "beasts_defeated",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "objectives_completed",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "level_started_at",
+              "type": "core::integer::u64"
+            },
+            {
+              "name": "level_completed_at",
+              "type": "core::integer::u64"
+            },
+            {
+              "name": "is_level_completed",
+              "type": "core::bool"
+            }
+          ]
+        },
+        {
+          "type": "struct",
+          "name": "elysium_descent::models::Level",
+          "members": [
+            {
+              "name": "level_id",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "level_name",
+              "type": "core::felt252"
+            },
+            {
+              "name": "player_type",
+              "type": "elysium_descent::models::PlayerType"
+            },
+            {
+              "name": "is_active",
+              "type": "core::bool"
+            },
+            {
+              "name": "created_at",
+              "type": "core::integer::u64"
+            },
+            {
+              "name": "modified_at",
+              "type": "core::integer::u64"
+            },
+            {
+              "name": "created_by",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "next_level",
+              "type": "core::integer::u32"
+            }
+          ]
+        },
+        {
+          "type": "struct",
+          "name": "elysium_descent::models::LevelCoins",
+          "members": [
+            {
+              "name": "level_id",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "spawn_count",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "total_collected",
+              "type": "core::integer::u32"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "name": "elysium_descent::models::BeastType",
+          "variants": [
+            {
+              "name": "Monster",
+              "type": "()"
+            },
+            {
+              "name": "Dragon",
+              "type": "()"
+            },
+            {
+              "name": "Goblin",
+              "type": "()"
+            },
+            {
+              "name": "Orc",
+              "type": "()"
+            },
+            {
+              "name": "Demon",
+              "type": "()"
+            },
+            {
+              "name": "Undead",
+              "type": "()"
+            },
+            {
+              "name": "Elemental",
+              "type": "()"
+            }
+          ]
+        },
+        {
+          "type": "struct",
+          "name": "elysium_descent::models::LevelBeast",
+          "members": [
+            {
+              "name": "level_id",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "beast_id",
+              "type": "core::felt252"
+            },
+            {
+              "name": "beast_type",
+              "type": "elysium_descent::models::BeastType"
+            },
+            {
+              "name": "x",
+              "type": "core::felt252"
+            },
+            {
+              "name": "y",
+              "type": "core::felt252"
+            },
+            {
+              "name": "z",
+              "type": "core::felt252"
+            },
+            {
+              "name": "health",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "damage",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "speed",
+              "type": "core::felt252"
+            },
+            {
+              "name": "is_defeated",
+              "type": "core::bool"
+            }
+          ]
+        },
+        {
+          "type": "enum",
+          "name": "elysium_descent::models::ObjectiveType",
+          "variants": [
+            {
+              "name": "Collect",
+              "type": "()"
+            },
+            {
+              "name": "ReachLocation",
+              "type": "()"
+            },
+            {
+              "name": "Defeat",
+              "type": "()"
+            },
+            {
+              "name": "Survive",
+              "type": "()"
+            },
+            {
+              "name": "Explore",
+              "type": "()"
+            }
+          ]
+        },
+        {
+          "type": "struct",
+          "name": "elysium_descent::models::LevelObjective",
+          "members": [
+            {
+              "name": "level_id",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "objective_id",
+              "type": "core::felt252"
+            },
+            {
+              "name": "title",
+              "type": "core::felt252"
+            },
+            {
+              "name": "description",
+              "type": "core::felt252"
+            },
+            {
+              "name": "objective_type",
+              "type": "elysium_descent::models::ObjectiveType"
+            },
+            {
+              "name": "target",
+              "type": "core::felt252"
+            },
+            {
+              "name": "required_count",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "current_count",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "reward",
+              "type": "core::felt252"
+            },
+            {
+              "name": "is_completed",
+              "type": "core::bool"
+            }
+          ]
+        },
+        {
+          "type": "struct",
+          "name": "elysium_descent::models::LevelEnvironment",
+          "members": [
+            {
+              "name": "level_id",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "dungeon_scale",
+              "type": "core::felt252"
+            },
+            {
+              "name": "dungeon_x",
+              "type": "core::felt252"
+            },
+            {
+              "name": "dungeon_y",
+              "type": "core::felt252"
+            },
+            {
+              "name": "dungeon_z",
+              "type": "core::felt252"
+            },
+            {
+              "name": "dungeon_rotation",
+              "type": "core::felt252"
             }
           ]
         },
@@ -1427,6 +1823,14 @@
             {
               "name": "items_collected",
               "type": "core::integer::u32"
+            },
+            {
+              "name": "beasts_defeated",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "objectives_completed",
+              "type": "core::integer::u32"
             }
           ]
         },
@@ -1448,6 +1852,18 @@
             },
             {
               "name": "books",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "coins",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "beast_essences",
+              "type": "core::integer::u32"
+            },
+            {
+              "name": "ancient_knowledge",
               "type": "core::integer::u32"
             },
             {
@@ -1500,6 +1916,54 @@
           "items": [
             {
               "type": "function",
+              "name": "create_player_profile",
+              "inputs": [
+                {
+                  "name": "username",
+                  "type": "core::felt252"
+                },
+                {
+                  "name": "player_type",
+                  "type": "elysium_descent::models::PlayerType"
+                }
+              ],
+              "outputs": [],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "update_player_profile",
+              "inputs": [
+                {
+                  "name": "username",
+                  "type": "core::felt252"
+                },
+                {
+                  "name": "player_type",
+                  "type": "elysium_descent::models::PlayerType"
+                }
+              ],
+              "outputs": [],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "get_player_profile",
+              "inputs": [
+                {
+                  "name": "player",
+                  "type": "core::starknet::contract_address::ContractAddress"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "elysium_descent::models::PlayerProfile"
+                }
+              ],
+              "state_mutability": "view"
+            },
+            {
+              "type": "function",
               "name": "create_game",
               "inputs": [],
               "outputs": [
@@ -1527,13 +1991,318 @@
             },
             {
               "type": "function",
+              "name": "complete_level",
+              "inputs": [
+                {
+                  "name": "game_id",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "level",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "get_game",
+              "inputs": [
+                {
+                  "name": "game_id",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "elysium_descent::models::Game"
+                }
+              ],
+              "state_mutability": "view"
+            },
+            {
+              "type": "function",
+              "name": "get_game_progress",
+              "inputs": [
+                {
+                  "name": "game_id",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "level",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "elysium_descent::models::GameProgress"
+                }
+              ],
+              "state_mutability": "view"
+            },
+            {
+              "type": "function",
+              "name": "admin_create_level",
+              "inputs": [
+                {
+                  "name": "level_name",
+                  "type": "core::felt252"
+                },
+                {
+                  "name": "player_type",
+                  "type": "elysium_descent::models::PlayerType"
+                },
+                {
+                  "name": "next_level",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "coins_data",
+                  "type": "core::array::Array::<core::felt252>"
+                },
+                {
+                  "name": "beasts_data",
+                  "type": "core::array::Array::<core::felt252>"
+                },
+                {
+                  "name": "objectives_data",
+                  "type": "core::array::Array::<core::felt252>"
+                },
+                {
+                  "name": "environment_data",
+                  "type": "core::array::Array::<core::felt252>"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "core::integer::u32"
+                }
+              ],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "admin_modify_level",
+              "inputs": [
+                {
+                  "name": "level_id",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "level_name",
+                  "type": "core::felt252"
+                },
+                {
+                  "name": "player_type",
+                  "type": "elysium_descent::models::PlayerType"
+                },
+                {
+                  "name": "next_level",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "coins_data",
+                  "type": "core::array::Array::<core::felt252>"
+                },
+                {
+                  "name": "beasts_data",
+                  "type": "core::array::Array::<core::felt252>"
+                },
+                {
+                  "name": "objectives_data",
+                  "type": "core::array::Array::<core::felt252>"
+                },
+                {
+                  "name": "environment_data",
+                  "type": "core::array::Array::<core::felt252>"
+                }
+              ],
+              "outputs": [],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "admin_deactivate_level",
+              "inputs": [
+                {
+                  "name": "level_id",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "admin_activate_level",
+              "inputs": [
+                {
+                  "name": "level_id",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "get_level",
+              "inputs": [
+                {
+                  "name": "level_id",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "elysium_descent::models::Level"
+                }
+              ],
+              "state_mutability": "view"
+            },
+            {
+              "type": "function",
+              "name": "get_level_coins",
+              "inputs": [
+                {
+                  "name": "level_id",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "elysium_descent::models::LevelCoins"
+                }
+              ],
+              "state_mutability": "view"
+            },
+            {
+              "type": "function",
+              "name": "get_level_beasts",
+              "inputs": [
+                {
+                  "name": "level_id",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "core::array::Array::<elysium_descent::models::LevelBeast>"
+                }
+              ],
+              "state_mutability": "view"
+            },
+            {
+              "type": "function",
+              "name": "get_level_objectives",
+              "inputs": [
+                {
+                  "name": "level_id",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "core::array::Array::<elysium_descent::models::LevelObjective>"
+                }
+              ],
+              "state_mutability": "view"
+            },
+            {
+              "type": "function",
+              "name": "get_level_environment",
+              "inputs": [
+                {
+                  "name": "level_id",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "elysium_descent::models::LevelEnvironment"
+                }
+              ],
+              "state_mutability": "view"
+            },
+            {
+              "type": "function",
               "name": "pickup_item",
-              "inputs": [],
+              "inputs": [
+                {
+                  "name": "game_id",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "item_id",
+                  "type": "core::integer::u32"
+                }
+              ],
               "outputs": [
                 {
                   "type": "core::bool"
                 }
               ],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "collect_coin",
+              "inputs": [
+                {
+                  "name": "game_id",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "level",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "coin_index",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "defeat_beast",
+              "inputs": [
+                {
+                  "name": "game_id",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "level",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "beast_id",
+                  "type": "core::felt252"
+                }
+              ],
+              "outputs": [],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "complete_objective",
+              "inputs": [
+                {
+                  "name": "game_id",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "level",
+                  "type": "core::integer::u32"
+                },
+                {
+                  "name": "objective_id",
+                  "type": "core::felt252"
+                }
+              ],
+              "outputs": [],
               "state_mutability": "external"
             },
             {
@@ -1584,6 +2353,54 @@
               "outputs": [
                 {
                   "type": "elysium_descent::models::LevelItems"
+                }
+              ],
+              "state_mutability": "view"
+            },
+            {
+              "type": "function",
+              "name": "add_admin",
+              "inputs": [
+                {
+                  "name": "admin_address",
+                  "type": "core::starknet::contract_address::ContractAddress"
+                },
+                {
+                  "name": "role",
+                  "type": "core::felt252"
+                },
+                {
+                  "name": "permissions",
+                  "type": "core::integer::u32"
+                }
+              ],
+              "outputs": [],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "remove_admin",
+              "inputs": [
+                {
+                  "name": "admin_address",
+                  "type": "core::starknet::contract_address::ContractAddress"
+                }
+              ],
+              "outputs": [],
+              "state_mutability": "external"
+            },
+            {
+              "type": "function",
+              "name": "is_admin",
+              "inputs": [
+                {
+                  "name": "address",
+                  "type": "core::starknet::contract_address::ContractAddress"
+                }
+              ],
+              "outputs": [
+                {
+                  "type": "core::bool"
                 }
               ],
               "state_mutability": "view"
@@ -1709,9 +2526,21 @@
       "tag": "elysium_001-actions",
       "selector": "0x17b04de24937921ae824b20f9fa2a84b1051c44dc9d8fb42571af03043347dd",
       "systems": [
+        "create_player_profile",
+        "update_player_profile",
         "create_game",
         "start_level",
+        "complete_level",
+        "admin_create_level",
+        "admin_modify_level",
+        "admin_deactivate_level",
+        "admin_activate_level",
         "pickup_item",
+        "collect_coin",
+        "defeat_beast",
+        "complete_objective",
+        "add_admin",
+        "remove_admin",
         "upgrade"
       ]
     }
@@ -1720,7 +2549,13 @@
   "models": [
     {
       "members": [],
-      "class_hash": "0x6fb55c36637065aaf4597edc971d2a1e84d5fb4b22a795775e9d57629032528",
+      "class_hash": "0x4b12218b58badbda84ff7b276d27756e64180482121b3498721b7fe7661b90",
+      "tag": "elysium_001-Admin",
+      "selector": "0x20b1aed17b3a73770cbe1e7af32d5c3ae159fa6f56815c015d07057f317c0eb"
+    },
+    {
+      "members": [],
+      "class_hash": "0x595cbf934e049916ca7ba06b62436443bb27d6176bc636fd0878d6f5f384fdc",
       "tag": "elysium_001-Game",
       "selector": "0xa987b32e111bf403d49258d1d30dfa5b57a06bc29533a0d202663fac1751a7"
     },
@@ -1732,30 +2567,102 @@
     },
     {
       "members": [],
+      "class_hash": "0x300d4ca539c397c8412f75f5616569a19d2fa47de5f3cbd89774cc270c4ef49",
+      "tag": "elysium_001-GameProgress",
+      "selector": "0x37e7ee0d4ef52075ef6e1159b0065221fe68daadfe48dfe9a2b88b15a83bcfc"
+    },
+    {
+      "members": [],
+      "class_hash": "0xb7c67d83a9d31b903c042e83ffce48edf35eac73b1aafc197c32391c6f25a6",
+      "tag": "elysium_001-Level",
+      "selector": "0x408e5de9c7b1e04e205232b0332edb701ce2d9fc99d6f89334df758f327826e"
+    },
+    {
+      "members": [],
+      "class_hash": "0x5d821c25b73daa0be1cf816d3c1b9bfa2f37303feab2ddf0be874b4c09308d8",
+      "tag": "elysium_001-LevelBeast",
+      "selector": "0x16d36bdf8e602a49aea1eee4405652ce16f0974ec69e3d0e3981c8b2b2d9c5d"
+    },
+    {
+      "members": [],
+      "class_hash": "0x484ded9708729cb635527a30e39dff86566bce27251c5ad8ca348dd10aed3f9",
+      "tag": "elysium_001-LevelCoinPosition",
+      "selector": "0x7b03e474cce1607e564c40f37bc5488711daa37e090bdfdb8f11ec1a9992cc"
+    },
+    {
+      "members": [],
+      "class_hash": "0x539b8156134614fcc0439e859b358341aaf79c162ab40c6f8a64a2b18d8f858",
+      "tag": "elysium_001-LevelCoins",
+      "selector": "0x6a6ca422b8153caab20e7c7fa6fc5a8e91855af58c449fb7be4d45e3cf4616b"
+    },
+    {
+      "members": [],
+      "class_hash": "0x2a96a900d8d606bcaf6ec666eddb80380754a260c6cae33139e017171fd0af8",
+      "tag": "elysium_001-LevelCounter",
+      "selector": "0x294d28be9ec749037bcc5679c8755497f62ccfd95ef042f769015a7158b92e6"
+    },
+    {
+      "members": [],
+      "class_hash": "0x4bf772e9c5914f0d3ced67c1c836c6771a971f5622359eef946346e3663eaaf",
+      "tag": "elysium_001-LevelEnvironment",
+      "selector": "0x6eec825f8a850118896cd958e3b17d686902aea07c6eb86e39fc04d23b279b8"
+    },
+    {
+      "members": [],
       "class_hash": "0x6917225e68e72610c067d97c26cffc444073d5658e1b0530c1c4d5faba89f7e",
       "tag": "elysium_001-LevelItems",
       "selector": "0x1b43a0f5afc603528f64f41b4b81bf81e206e63f41b813d6ec6a5c0056ab015"
     },
     {
       "members": [],
-      "class_hash": "0x41634bb8266abacb5c8ae1b09c9f1462ae62618720bba0ceb68618b59b2c56f",
+      "class_hash": "0x78457c43b9249ee64c8327aa23fc282c0ed9d2b7a39d83826c0c889ca01e53d",
+      "tag": "elysium_001-LevelObjective",
+      "selector": "0x3c02cba41a2211a46ec52342941e42b427f7f099fc3559b869ed1a67266e75f"
+    },
+    {
+      "members": [],
+      "class_hash": "0x629a586f7ee2205be8cf91f4e7363740a43af42749ea8ca4c5b4bf022c840af",
+      "tag": "elysium_001-LevelObjectivePosition",
+      "selector": "0x366d9e0619d5e078a680990dfc1228ae73e69fa5cf76ef472b6646ec82ac927"
+    },
+    {
+      "members": [],
+      "class_hash": "0x23964ec0add92801668a178c3eef2c646d5c6b35ef660d4116b7ede4bde7f5d",
       "tag": "elysium_001-PlayerInventory",
       "selector": "0x58734cc349cd6a0779b7b50b4330bb2a07a997d903675b890847d0f9da79e"
     },
     {
       "members": [],
-      "class_hash": "0x9141def6661467339be326d1fe83907380648097a8de4e1cba85f7d79170fc",
+      "class_hash": "0x524da68f7132cfdbec89bc5430134d407963fc45dfc4dd49cf7edbeba253ea4",
+      "tag": "elysium_001-PlayerProfile",
+      "selector": "0x74ba3dc1206e4f438e7b04a845ab4537de8b4fbf82d1c6454fae26ec6c5b3d7"
+    },
+    {
+      "members": [],
+      "class_hash": "0x7b02f66d12258e074349a2a9afeef6457eaf4cbd6edecf9ab1a5ec7c38c6a76",
       "tag": "elysium_001-PlayerStats",
       "selector": "0x575e5002176ad15c9c2347a2b2ad6361fdf55c4632a94a14aef299c8845b317"
     },
     {
       "members": [],
-      "class_hash": "0x3437f457088ae51dbfe6fe31e85fd897447698c38565f8343bc0fdd48acfbb4",
+      "class_hash": "0x689d2eb96f7f13a7893b6f6cef32b725ea6838f82448108874a833e36edfded",
       "tag": "elysium_001-WorldItem",
       "selector": "0x31a6bead5e4e4e91a28bcd367c9e04b6b275f408ec2af3ef74fae35add235ef"
     }
   ],
   "events": [
+    {
+      "members": [],
+      "class_hash": "0x1ae3677bfdf8d75ded558433d63d3a5ac3404cdc6d0789dcaad905543a4c708",
+      "tag": "elysium_001-BeastDefeated",
+      "selector": "0x23b56c29cda220e667fd5a5069883d9571ffda21a9e2c28df70ea98c4d4409"
+    },
+    {
+      "members": [],
+      "class_hash": "0x7bed59c8b8392f09e46597d7d1e1127e6c956bed8355194d56eccb06e4da4b6",
+      "tag": "elysium_001-CoinCollected",
+      "selector": "0x7315a569812a212be2432bf6fcc64ee083b26bc621cdbde96dc7d4eab8776ea"
+    },
     {
       "members": [],
       "class_hash": "0x74542073f0069ea28b4cf8dd7d5cf55eb219a7f353841a872c511b87a637e",
@@ -1764,15 +2671,45 @@
     },
     {
       "members": [],
-      "class_hash": "0x34d8eee2566245293deca7cec62e6aadb8ca5044328945c5568f25174478266",
-      "tag": "elysium_001-ItemPickedUp",
-      "selector": "0x596fa771166fd5f4dfec561ed98b878f7518675926c61a86d8671dd1a86243b"
+      "class_hash": "0x4804e0430797849482895d21a93e40cdbbf55a089b299cc85778ab679ab9c46",
+      "tag": "elysium_001-LevelCompleted",
+      "selector": "0x4196dddb35835e04a0949420e3c8b01a72b74b41f01e4790affc893f6fd1e61"
     },
     {
       "members": [],
-      "class_hash": "0x51ab76764b272c5abb441d54b44efddd4152bc85dc1eba5a7e867533c119b42",
+      "class_hash": "0x5156f5b48d357a438ea02f4ab3a648006ca98c016c89690889a1084b8c00278",
+      "tag": "elysium_001-LevelCreated",
+      "selector": "0x6fda6befe4f4679e837f15b400fe2d840bf2b895a93d0189cd06c9c9141021f"
+    },
+    {
+      "members": [],
+      "class_hash": "0x51a916c4958496097391c538ad2cb24fc54db71c67c867ed4d35bc2c18e1fad",
+      "tag": "elysium_001-LevelModified",
+      "selector": "0x45f601b18aee470a25377d3a6d280ca3cb08ac185b33de0fa129b16fecd935a"
+    },
+    {
+      "members": [],
+      "class_hash": "0xeea1fa8a217b47f927f733aa739bc77a890f8fdf895ff20402a540c0b07f3a",
       "tag": "elysium_001-LevelStarted",
       "selector": "0x6baa58d422637916a19f2a55ecb8780ec1b0262d5f982aa76487a935ec58cd9"
+    },
+    {
+      "members": [],
+      "class_hash": "0x20949fd929999de248bb4984ba4516ccaa31d29a0a1a3b2fa35bb8d89dc18cc",
+      "tag": "elysium_001-ObjectiveCompleted",
+      "selector": "0x5c066670991f989abc0f80ac8b7c3e72eed008637b81cb9502a3d4fb8079afa"
+    },
+    {
+      "members": [],
+      "class_hash": "0x2f3f0240424314338e8aac8ca95d26d6a9677dbf9778053a6782ef2eb8400a8",
+      "tag": "elysium_001-PlayerProfileCreated",
+      "selector": "0x76681de53acb8a8b11ffb31e7935e0592bba917a4e12883ba78fd103093d690"
+    },
+    {
+      "members": [],
+      "class_hash": "0x2522cbb2b4aa277c4f425311e5e2da2f24ed0d01a16126bb49daf14565ad1b6",
+      "tag": "elysium_001-PlayerProfileUpdated",
+      "selector": "0x2502fbc4fcaf5992a4b6e940cfa5f0dd27e3ba69546b8a8a81d5776a19f6aef"
     }
   ],
   "external_contracts": []

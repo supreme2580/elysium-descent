@@ -67,6 +67,14 @@ pub trait IActions<T> {
     fn add_admin(ref self: T, admin_address: ContractAddress, role: felt252, permissions: u32);
     fn remove_admin(ref self: T, admin_address: ContractAddress);
     fn is_admin(self: @T, address: ContractAddress) -> bool;
+    
+    // Helper Functions
+    fn calculate_player_level(self: @T, total_experience: u32) -> (u32, u32);
+    fn calculate_level_experience(self: @T, game_progress: GameProgress, level: u32) -> u32;
+    fn serialize_coins_data(self: @T, level_coins: LevelCoins) -> Array<felt252>;
+    fn serialize_beasts_data(self: @T, level_beasts: LevelBeast) -> Array<felt252>;
+    fn serialize_objectives_data(self: @T, level_objectives: LevelObjective) -> Array<felt252>;
+    fn serialize_environment_data(self: @T, level_environment: LevelEnvironment) -> Array<felt252>;
 }
 
 // dojo decorator
@@ -113,13 +121,20 @@ pub mod actions {
         pub created_at: u64,
     }
 
-    #[derive(Copy, Drop, Serde)]
+    #[derive(Drop, Serde)]
     #[dojo::event]
     pub struct LevelStarted {
         #[key]
+        pub level_id: u32,
+        pub level_name: felt252,
+        pub player_type: felt252,
+        pub coins_data: Array<felt252>,
+        pub beasts_data: Array<felt252>,
+        pub objectives_data: Array<felt252>,
+        pub environment_data: Array<felt252>,
+        pub next_level: u32,
         pub player: ContractAddress,
         pub game_id: u32,
-        pub level: u32,
         pub started_at: u64,
     }
 
@@ -132,6 +147,8 @@ pub mod actions {
         pub level: u32,
         pub completed_at: u64,
         pub score: u32,
+        pub experience_gained: u32,
+        pub new_player_level: u32,
     }
 
     #[derive(Copy, Drop, Serde)]
@@ -185,6 +202,18 @@ pub mod actions {
         pub level: u32,
         pub objective_id: felt252,
         pub completed_at: u64,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct PlayerLevelUp {
+        #[key]
+        pub player: ContractAddress,
+        pub old_level: u32,
+        pub new_level: u32,
+        pub new_max_health: u32,
+        pub experience_gained: u32,
+        pub timestamp: u64,
     }
 
     #[abi(embed_v0)]
@@ -336,6 +365,9 @@ pub mod actions {
             assert(level_data.is_active, 'Level is not active');
             assert(level_data.player_type == game.player_type, 'Level not compatible');
 
+            // Verify player has reached this level (can't skip levels)
+            assert(level <= game.current_level + 1, 'Cannot skip levels');
+
             // Update game level
             game.current_level = level;
             world.write_model(@game);
@@ -353,10 +385,24 @@ pub mod actions {
             };
             world.write_model(@game_progress);
 
+            // Get level data for emission
+            let level_coins: LevelCoins = world.read_model(level);
+            let level_beasts: LevelBeast = world.read_model(level);
+            let level_objectives: LevelObjective = world.read_model(level);
+            let level_environment: LevelEnvironment = world.read_model(level);
+
+            // Emit comprehensive level data for game client
             world.emit_event(@LevelStarted {
+                level_id: level,
+                level_name: level_data.level_name,
+                player_type: level_data.player_type.into(),
+                coins_data: self.serialize_coins_data(level_coins),
+                beasts_data: self.serialize_beasts_data(level_beasts),
+                objectives_data: self.serialize_objectives_data(level_objectives),
+                environment_data: self.serialize_environment_data(level_environment),
+                next_level: level_data.next_level,
                 player,
-                    game_id,
-                    level,
+                game_id,
                 started_at: current_time,
             });
         }
@@ -371,37 +417,142 @@ pub mod actions {
             assert(game.player == player, 'Not your game');
             assert(game.status == GameStatus::InProgress, 'Game not in progress');
 
+            // Verify this is the current level being played
+            assert(game.current_level == level, 'Complete current level first');
+
             // Get game progress for this level
             let mut game_progress: GameProgress = world.read_model((game_id, level));
             assert(!game_progress.is_level_completed, 'Level already completed');
+
+            // Verify level completion requirements
+            let level_objectives: LevelObjective = world.read_model(level);
+            let required_objectives = level_objectives.objective_count;
+            assert(game_progress.objectives_completed >= required_objectives, 'Objectives not completed');
 
             // Mark level as completed
             game_progress.is_level_completed = true;
             game_progress.level_completed_at = current_time;
             world.write_model(@game_progress);
 
-            // Update game score and level
+            // Calculate level score and experience
             let level_score = self.calculate_level_score(game_progress);
+            let level_experience = self.calculate_level_experience(game_progress, level);
+
+            // Update game score and level
             game.score += level_score;
             game.current_level = level + 1;
             world.write_model(@game);
 
-            // Update player profile
+            // Update player profile and stats
             let mut player_profile: PlayerProfile = world.read_model(player);
+            let mut player_stats: PlayerStats = world.read_model(player);
+
             player_profile.total_score = player_profile.total_score + level_score.into();
             if level > player_profile.highest_level_reached {
                 player_profile.highest_level_reached = level;
             }
             player_profile.last_active = current_time;
+
+            // Level up logic
+            let new_experience = player_stats.experience + level_experience;
+            let (new_level, remaining_experience) = self.calculate_player_level(new_experience);
+            
+            if new_level > player_stats.level {
+                // Level up!
+                let old_level = player_stats.level;
+                player_stats.level = new_level;
+                player_stats.max_health += 10; // Increase max health
+                player_stats.health = player_stats.max_health; // Restore health on level up
+                
+                world.emit_event(@PlayerLevelUp {
+                    player,
+                    old_level,
+                    new_level,
+                    new_max_health: player_stats.max_health,
+                    experience_gained: level_experience,
+                    timestamp: current_time,
+                });
+            }
+
+            player_stats.experience = remaining_experience;
             world.write_model(@player_profile);
+            world.write_model(@player_stats);
 
             world.emit_event(@LevelCompleted {
                 player,
-                    game_id,
-                    level,
+                game_id,
+                level,
                 completed_at: current_time,
                 score: level_score,
+                experience_gained: level_experience,
+                new_player_level: player_stats.level,
             });
+        }
+
+        // Helper function to calculate player level from experience
+        fn calculate_player_level(self: @ContractState, total_experience: u32) -> (u32, u32) {
+            // Simple level calculation: every 100 exp = level up
+            let level = (total_experience / 100) + 1;
+            let remaining_exp = total_experience % 100;
+            (level, remaining_exp)
+        }
+
+        // Helper function to calculate level experience
+        fn calculate_level_experience(self: @ContractState, game_progress: GameProgress, level: u32) -> u32 {
+            let base_experience = level * 50; // Base experience per level
+            let coin_bonus = game_progress.coins_collected * 10; // 10 exp per coin
+            let beast_bonus = game_progress.beasts_defeated * 25; // 25 exp per beast
+            let objective_bonus = game_progress.objectives_completed * 100; // 100 exp per objective
+            
+            base_experience + coin_bonus + beast_bonus + objective_bonus
+        }
+
+        // Helper function to serialize coins data
+        fn serialize_coins_data(self: @ContractState, level_coins: LevelCoins) -> Array<felt252> {
+            let mut data = ArrayTrait::new();
+            data.append(level_coins.spawn_count.into());
+            
+            // For now, return simplified data structure
+            // In a full implementation, you'd iterate through coin positions
+            data
+        }
+
+        // Helper function to serialize beasts data
+        fn serialize_beasts_data(self: @ContractState, level_beasts: LevelBeast) -> Array<felt252> {
+            let mut data = ArrayTrait::new();
+            data.append(level_beasts.beast_id.into());
+            data.append(level_beasts.beast_type.into());
+            data.append(level_beasts.spawn_position_x.into());
+            data.append(level_beasts.spawn_position_y.into());
+            data.append(level_beasts.spawn_position_z.into());
+            data.append(level_beasts.health.into());
+            data.append(level_beasts.damage.into());
+            data.append(level_beasts.speed.into());
+            data
+        }
+
+        // Helper function to serialize objectives data
+        fn serialize_objectives_data(self: @ContractState, level_objectives: LevelObjective) -> Array<felt252> {
+            let mut data = ArrayTrait::new();
+            data.append(level_objectives.objective_id.into());
+            data.append(level_objectives.title.into());
+            data.append(level_objectives.description.into());
+            data.append(level_objectives.objective_type.into());
+            data.append(level_objectives.target.into());
+            data.append(level_objectives.required_count.into());
+            data.append(level_objectives.reward.into());
+            data
+        }
+
+        // Helper function to serialize environment data
+        fn serialize_environment_data(self: @ContractState, level_environment: LevelEnvironment) -> Array<felt252> {
+            let mut data = ArrayTrait::new();
+            data.append(level_environment.dungeon_scale.into());
+            data.append(level_environment.dungeon_position_x.into());
+            data.append(level_environment.dungeon_position_y.into());
+            data.append(level_environment.dungeon_position_z.into());
+            data.append(level_environment.dungeon_rotation.into());
+            data
         }
 
         fn get_game(self: @ContractState, game_id: u32) -> Game {
@@ -830,9 +981,9 @@ pub mod actions {
                 level_id,
                 beast_id: 'monster_1',
                 beast_type: BeastType::Monster,
-                x: 0,
-                y: 1,
-                z: 0,
+                spawn_position_x: 0,
+                spawn_position_y: 1,
+                spawn_position_z: 0,
                 health: 100,
                 damage: 25,
                 speed: 3,
@@ -860,6 +1011,7 @@ pub mod actions {
                 current_count: 0,
                 reward: 'unlock_level_2',
                 is_completed: false,
+                objective_count: 1, // Added for new event
             };
             world.write_model(@objective);
         }
@@ -875,9 +1027,9 @@ pub mod actions {
             let environment = LevelEnvironment {
                 level_id,
                 dungeon_scale: 7,
-                dungeon_x: 0,
-                dungeon_y: -1,
-                dungeon_z: 0,
+                dungeon_position_x: 0,
+                dungeon_position_y: -1,
+                dungeon_position_z: 0,
                 dungeon_rotation: -1,
             };
             world.write_model(@environment);
