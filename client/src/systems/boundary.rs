@@ -69,45 +69,8 @@ impl Plugin for BoundaryPlugin {
         )
         .add_systems(
             Update,
-            (
-                constrain_player_movement,
-                log_player_position,
-            ),
+            constrain_player_movement,
         );
-    }
-}
-
-/// Logs the player's current position every 5 seconds for debugging boundary lengths
-fn log_player_position(
-    time: Res<Time>,
-    player_query: Query<&Transform, With<crate::systems::character_controller::CharacterController>>,
-    boundary_constraint: Option<Res<BoundaryConstraint>>,
-    mut last_log_time: Local<f32>,
-) {
-    // Log every 5 seconds
-    if time.elapsed_secs() - *last_log_time < 5.0 {
-        return;
-    }
-    
-    let Some(boundary_constraint) = boundary_constraint else {
-        return; // No boundary constraints defined, skip this system
-    };
-
-    if let Ok(player_transform) = player_query.single() {
-        let player_pos = player_transform.translation;
-        
-        info!("=== PLAYER POSITION LOG ===");
-        info!("Player X: {:.2} (bounds: {:.2} to {:.2})", player_pos.x, boundary_constraint.min_x, boundary_constraint.max_x);
-        info!("Player Z: {:.2} (bounds: {:.2} to {:.2})", player_pos.z, boundary_constraint.min_z, boundary_constraint.max_z);
-        info!("Player Y: {:.2}", player_pos.y);
-        info!("Distance to boundaries:");
-        info!("  North: {:.2} units", boundary_constraint.max_z - player_pos.z);
-        info!("  South: {:.2} units", player_pos.z - boundary_constraint.min_z);
-        info!("  East: {:.2} units", boundary_constraint.max_x - player_pos.x);
-        info!("  West: {:.2} units", player_pos.x - boundary_constraint.min_x);
-        info!("==========================");
-        
-        *last_log_time = time.elapsed_secs();
     }
 }
 
@@ -141,34 +104,39 @@ fn spawn_boundary_walls(
     let ground_y = -1.5; // environment ground offset
     let y_center = ground_y + (wall_height / 2.0);
     
-    // Materials per side (semi-transparent)
-    let mat_north = materials.add(StandardMaterial { base_color: Color::srgba(1.0, 0.0, 0.0, 0.35), alpha_mode: AlphaMode::Blend, ..default() });
-    let mat_south = materials.add(StandardMaterial { base_color: Color::srgba(1.0, 1.0, 0.0, 0.35), alpha_mode: AlphaMode::Blend, ..default() });
-    let mat_east  = materials.add(StandardMaterial { base_color: Color::srgba(0.0, 1.0, 0.0, 0.35), alpha_mode: AlphaMode::Blend, ..default() });
-    let mat_west  = materials.add(StandardMaterial { base_color: Color::srgba(0.0, 0.5, 1.0, 0.35), alpha_mode: AlphaMode::Blend, ..default() });
+    // Create materials for each wall with transparency
+    let north_material = materials.add(StandardMaterial {
+        base_color: Color::srgba(1.0, 0.0, 0.0, 0.0), // Red, fully transparent
+        ..Default::default()
+    });
     
+    let south_material = materials.add(StandardMaterial {
+        base_color: Color::srgba(1.0, 1.0, 0.0, 0.0), // Yellow, fully transparent
+        ..Default::default()
+    });
+    
+    let east_material = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.0, 1.0, 0.0, 0.0), // Green, fully transparent
+        ..Default::default()
+    });
+    
+    let west_material = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.0, 0.0, 1.0, 0.0), // Blue, fully transparent
+        ..Default::default()
+    });
+    
+    // Spawn the boundary walls
     // North wall (positive Z) - spans the full width
     commands.spawn((
-        Name::new("North Boundary Wall"),
-        Transform::from_xyz(
-            min_x + (world_width / 2.0), // Center of world width
-            y_center, // Centered so it starts at ground level
-            max_z + (wall_thickness / 2.0), // Just outside the max Z
-        ),
-        Collider::cuboid(
-            // Span along X (world width)
-            world_width / 2.0,
-            wall_height / 2.0,
-            wall_thickness / 2.0,
-        ),
-        RigidBody::Static,
         BoundaryWall,
-        crate::screens::gameplay::PlayingScene,
-    ))
-    .with_children(|c| {
+        RigidBody::Static,
+        Collider::cuboid(world_width / 2.0, wall_height / 2.0, wall_thickness / 2.0),
+        Transform::from_xyz(BoundaryConstants::WORLD_CENTER_X, y_center, BoundaryConstants::WORLD_CENTER_Z + world_depth / 2.0),
+        GlobalTransform::default(),
+    )).with_children(|c| {
         c.spawn((
             Mesh3d(meshes.add(Cuboid::new(world_width, wall_height, wall_thickness))),
-            MeshMaterial3d(mat_north.clone()),
+            MeshMaterial3d(north_material.clone()),
             Transform::default(),
             GlobalTransform::default(),
         ));
@@ -176,26 +144,15 @@ fn spawn_boundary_walls(
 
     // South wall (negative Z) - spans the full width
     commands.spawn((
-        Name::new("South Boundary Wall"),
-        Transform::from_xyz(
-            min_x + (world_width / 2.0), // Center of world width
-            y_center, // Centered so it starts at ground level
-            min_z - (wall_thickness / 2.0), // Just outside the min Z
-        ),
-        Collider::cuboid(
-            // Span along X (world width)
-            world_width / 2.0,
-            wall_height / 2.0,
-            wall_thickness / 2.0,
-        ),
-        RigidBody::Static,
         BoundaryWall,
-        crate::screens::gameplay::PlayingScene,
-    ))
-    .with_children(|c| {
+        RigidBody::Static,
+        Collider::cuboid(world_width / 2.0, wall_height / 2.0, wall_thickness / 2.0),
+        Transform::from_xyz(BoundaryConstants::WORLD_CENTER_X, y_center, BoundaryConstants::WORLD_CENTER_Z - world_depth / 2.0),
+        GlobalTransform::default(),
+    )).with_children(|c| {
         c.spawn((
             Mesh3d(meshes.add(Cuboid::new(world_width, wall_height, wall_thickness))),
-            MeshMaterial3d(mat_south.clone()),
+            MeshMaterial3d(south_material.clone()),
             Transform::default(),
             GlobalTransform::default(),
         ));
@@ -203,25 +160,15 @@ fn spawn_boundary_walls(
 
     // East wall (positive X) - spans the full depth
     commands.spawn((
-        Name::new("East Boundary Wall"),
-        Transform::from_xyz(
-            max_x + (wall_thickness / 2.0), // Just outside the max X
-            y_center, // Centered so it starts at ground level
-            min_z + (world_depth / 2.0), // Center of world depth
-        ),
-        Collider::cuboid(
-            wall_thickness / 2.0, // Half the wall thickness
-            wall_height / 2.0, // Half the wall height
-            world_depth / 2.0, // Half the world depth
-        ),
-        RigidBody::Static,
         BoundaryWall,
-        crate::screens::gameplay::PlayingScene,
-    ))
-    .with_children(|c| {
+        RigidBody::Static,
+        Collider::cuboid(wall_thickness / 2.0, wall_height / 2.0, world_depth / 2.0),
+        Transform::from_xyz(BoundaryConstants::WORLD_CENTER_X + world_width / 2.0, y_center, BoundaryConstants::WORLD_CENTER_Z),
+        GlobalTransform::default(),
+    )).with_children(|c| {
         c.spawn((
             Mesh3d(meshes.add(Cuboid::new(wall_thickness, wall_height, world_depth))),
-            MeshMaterial3d(mat_east.clone()),
+            MeshMaterial3d(east_material.clone()),
             Transform::default(),
             GlobalTransform::default(),
         ));
@@ -229,43 +176,33 @@ fn spawn_boundary_walls(
 
     // West wall (negative X) - spans the full depth
     commands.spawn((
-        Name::new("West Boundary Wall"),
-        Transform::from_xyz(
-            min_x - (wall_thickness / 2.0), // Just outside the min X
-            y_center, // Centered so it starts at ground level
-            min_z + (world_depth / 2.0), // Center of world depth
-        ),
-        Collider::cuboid(
-            wall_thickness / 2.0, // Half the wall thickness
-            wall_height / 2.0, // Half the wall height
-            world_depth / 2.0, // Half the world depth
-        ),
-        RigidBody::Static,
         BoundaryWall,
-        crate::screens::gameplay::PlayingScene,
-    ))
-    .with_children(|c| {
+        RigidBody::Static,
+        Collider::cuboid(wall_thickness / 2.0, wall_height / 2.0, world_depth / 2.0),
+        Transform::from_xyz(BoundaryConstants::WORLD_CENTER_X - world_width / 2.0, y_center, BoundaryConstants::WORLD_CENTER_Z),
+        GlobalTransform::default(),
+    )).with_children(|c| {
         c.spawn((
             Mesh3d(meshes.add(Cuboid::new(wall_thickness, wall_height, world_depth))),
-            MeshMaterial3d(mat_west.clone()),
+            MeshMaterial3d(west_material.clone()),
             Transform::default(),
             GlobalTransform::default(),
         ));
     });
 
-    // Safety floor covering the whole playable area to prevent falling through gaps
+    // Safety floor to prevent falling through gaps
     let floor_thickness = 1.0;
     commands.spawn((
         Name::new("Boundary Safety Floor"),
         Transform::from_xyz(
-            min_x + (world_width / 2.0),
+            BoundaryConstants::WORLD_CENTER_X,
             ground_y - (floor_thickness / 2.0), // Top of the floor aligns with ground_y
-            min_z + (world_depth / 2.0),
+            BoundaryConstants::WORLD_CENTER_Z,
         ),
         Collider::cuboid(
-            world_width / 2.0,
-            floor_thickness / 2.0,
-            world_depth / 2.0,
+            world_width / 2.0,  // Half the world width
+            floor_thickness / 2.0, // Half the floor thickness
+            world_depth / 2.0,  // Half the world depth
         ),
         RigidBody::Static,
         BoundaryWall,
@@ -274,16 +211,6 @@ fn spawn_boundary_walls(
 
     // Add the boundary constraint as a resource
     commands.insert_resource(constraint);
-    
-    // Log boundary information for debugging
-    info!("Boundary walls spawned:");
-    info!("  World dimensions: {} x {} units", world_width, world_depth);
-    info!("  X range: {} to {}", min_x, max_x);
-    info!("  Z range: {} to {}", min_z, max_z);
-    info!("  North wall at Z = {}", max_z + (wall_thickness / 2.0));
-    info!("  South wall at Z = {}", min_z - (wall_thickness / 2.0));
-    info!("  East wall at X = {}", max_x + (wall_thickness / 2.0));
-    info!("  West wall at X = {}", min_x - (wall_thickness / 2.0));
 }
 
 /// Constrains player movement to stay within boundaries
