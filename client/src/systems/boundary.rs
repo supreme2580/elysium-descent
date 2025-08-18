@@ -51,7 +51,7 @@ impl Default for BoundaryConstraint {
         
         Self {
             min_x: BoundaryConstants::WORLD_CENTER_X - half_length,  // West boundary (offset inwards)
-            max_x: BoundaryConstants::WORLD_CENTER_X + half_length - inset,          // East boundary (kept exact)
+            max_x: BoundaryConstants::WORLD_CENTER_X + half_length - (inset * 2.0),          // East boundary (kept exact)
             min_z: BoundaryConstants::WORLD_CENTER_Z - half_length + inset,  // South boundary (offset inwards)
             max_z: BoundaryConstants::WORLD_CENTER_Z + half_length - inset,  // North boundary (offset inwards)
         }
