@@ -359,6 +359,37 @@ pub struct SessionProgress {
     pub is_session_active: bool,
 }
 
+// Turn-based fight session per game and level
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct FightSession {
+    #[key]
+    pub game_id: u32,
+    #[key]
+    pub level: u32,
+    pub started_at: u64,
+    pub turn_number: u32,
+    // true if it's player's turn, false if enemy's
+    pub is_player_turn: bool,
+    pub player_hp_current: u32,
+    pub enemies_remaining: u32,
+    pub is_active: bool,
+}
+
+// Per-enemy state within a fight session
+#[derive(Copy, Drop, Serde)]
+#[dojo::model]
+pub struct FightBeastState {
+    #[key]
+    pub game_id: u32,
+    #[key]
+    pub level: u32,
+    #[key]
+    pub beast_id: felt252,
+    pub hp_current: u32,
+    pub is_alive: bool,
+}
+
 // Admin Management
 #[derive(Copy, Drop, Serde)]
 #[dojo::model]

@@ -1,7 +1,7 @@
 use elysium_descent::models::{
     Admin, BeastType, Game, GameCounter, GameProgress, GameStatus, ItemType, Level, LevelBeast,
     LevelCoins, LevelCounter, LevelEnvironment, LevelItems, LevelObjective, ObjectiveType,
-    PlayerInventory, PlayerProfile, PlayerStats, PlayerType, SessionProgress, WorldItem, GAME_COUNTER_ID, LEVEL_COUNTER_ID,
+    PlayerInventory, PlayerProfile, PlayerStats, PlayerType, SessionProgress, FightSession, FightBeastState, WorldItem, GAME_COUNTER_ID, LEVEL_COUNTER_ID,
 };
 use starknet::{ContractAddress, get_block_timestamp};
 
@@ -63,6 +63,12 @@ pub trait IActions<T> {
     fn get_session_progress(self: @T, game_id: u32, level: u32) -> SessionProgress;
     fn reset_session(ref self: T, game_id: u32, level: u32);
     fn finalize_session(ref self: T, game_id: u32, level: u32, success: bool);
+
+    // Turn-based combat
+    fn fight_start(ref self: T, game_id: u32, level: u32);
+    fn fight_player_attack(ref self: T, game_id: u32, level: u32, target_beast_id: felt252);
+    fn fight_enemy_turn(ref self: T, game_id: u32, level: u32);
+    fn fight_flee(ref self: T, game_id: u32, level: u32);
     
     // Player Stats & Inventory
     fn get_player_stats(self: @T, player: ContractAddress) -> PlayerStats;
@@ -81,6 +87,10 @@ pub trait IActions<T> {
     fn serialize_beasts_data(self: @T, level_beasts: LevelBeast) -> Array<felt252>;
     fn serialize_objectives_data(self: @T, level_objectives: LevelObjective) -> Array<felt252>;
     fn serialize_environment_data(self: @T, level_environment: LevelEnvironment) -> Array<felt252>;
+    // combat helper signatures (kept in trait to avoid impl warnings)
+    // Note: helper logic is inlined in methods for MVP, keep signatures for future use
+    // fn get_enemy_attack_power(self: @T, beast: LevelBeast) -> u32;
+    // fn get_player_attack_power(self: @T, stats: PlayerStats) -> u32;
 }
 
 // dojo decorator
@@ -93,7 +103,7 @@ pub mod actions {
     use super::{
         Admin, BeastType, Game, GameCounter, GameProgress, GameStatus, IActions, ItemType, Level,
         LevelBeast, LevelCoins, LevelCounter, LevelEnvironment, LevelItems, LevelObjective,
-        ObjectiveType, PlayerInventory, PlayerProfile, PlayerStats, PlayerType, SessionProgress, WorldItem,
+        ObjectiveType, PlayerInventory, PlayerProfile, PlayerStats, PlayerType, SessionProgress, FightSession, FightBeastState, WorldItem,
         GAME_COUNTER_ID, LEVEL_COUNTER_ID, get_block_timestamp,
     };
 
@@ -213,6 +223,59 @@ pub mod actions {
         pub beasts_defeated: u32,
         pub objectives_completed: u32,
         pub message: felt252,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct FightStarted {
+        #[key]
+        pub player: ContractAddress,
+        pub game_id: u32,
+        pub level: u32,
+        pub started_at: u64,
+        pub enemies: u32,
+        pub player_hp: u32,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct PlayerAttacked {
+        #[key]
+        pub player: ContractAddress,
+        pub game_id: u32,
+        pub level: u32,
+        pub turn: u32,
+        pub target_beast_id: felt252,
+        pub damage: u32,
+        pub beast_hp_after: u32,
+        pub beast_is_alive: bool,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct EnemyAttacked {
+        #[key]
+        pub player: ContractAddress,
+        pub game_id: u32,
+        pub level: u32,
+        pub turn: u32,
+        pub beast_id: felt252,
+        pub damage: u32,
+        pub player_hp_after: u32,
+        pub player_is_alive: bool,
+    }
+
+    #[derive(Copy, Drop, Serde)]
+    #[dojo::event]
+    pub struct FightEnded {
+        #[key]
+        pub player: ContractAddress,
+        pub game_id: u32,
+        pub level: u32,
+        pub ended_at: u64,
+        pub victory: bool,
+        pub enemies_defeated: u32,
+        pub player_hp: u32,
     }
 
     #[derive(Copy, Drop, Serde)]
@@ -1064,6 +1127,206 @@ pub mod actions {
                     message: 'Failed',
                 });
             }
+        }
+
+        // Initialize a fight session using level beasts data
+        fn fight_start(ref self: ContractState, game_id: u32, level: u32) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+            let now = get_block_timestamp();
+
+            // Validate game and level
+            let game: Game = world.read_model(game_id);
+            assert(game.player == player, 'Not your game');
+            assert(game.status == GameStatus::InProgress, 'Game not in progress');
+            assert(game.current_level == level, 'Not current level');
+
+            // Load player stats
+            let stats: PlayerStats = world.read_model(player);
+
+            // Count enemies for this level
+            // Note: If multiple beasts per level are stored as an Array, adapt retrieval accordingly.
+            // Here we assume one record per beast keyed by (level, beast_id) is retrievable via a known set.
+            // For MVP, we read one canonical beast and set enemies_remaining to 1 if exists.
+            let maybe_beast: LevelBeast = world.read_model(level);
+            let enemies_remaining = 1;
+
+            // Initialize fight session
+            let fight = FightSession {
+                game_id,
+                level,
+                started_at: now,
+                turn_number: 1,
+                is_player_turn: true,
+                player_hp_current: stats.health,
+                enemies_remaining,
+                is_active: true,
+            };
+            world.write_model(@fight);
+
+            // Initialize beast state
+            let beast_state = FightBeastState {
+                game_id,
+                level,
+                beast_id: maybe_beast.beast_id,
+                hp_current: maybe_beast.health,
+                is_alive: true,
+            };
+            world.write_model(@beast_state);
+
+            world.emit_event(@FightStarted {
+                player,
+                game_id,
+                level,
+                started_at: now,
+                enemies: enemies_remaining,
+                player_hp: stats.health,
+            });
+        }
+
+        // Player performs an attack against a target beast
+        fn fight_player_attack(ref self: ContractState, game_id: u32, level: u32, target_beast_id: felt252) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+
+            let mut fight: FightSession = world.read_model((game_id, level));
+            assert(fight.is_active, 'Fight not active');
+            assert(fight.is_player_turn, 'Not player turn');
+
+            let stats: PlayerStats = world.read_model(player);
+            let mut beast_state: FightBeastState = world.read_model((game_id, level, target_beast_id));
+            assert(beast_state.is_alive, 'Beast already dead');
+
+            // Compute damage
+            // Player damage formula (MVP): level * 5
+            let damage = stats.level * 5;
+            if damage >= beast_state.hp_current {
+                beast_state.hp_current = 0;
+                beast_state.is_alive = false;
+                fight.enemies_remaining -= 1;
+            } else {
+                beast_state.hp_current -= damage;
+            }
+            world.write_model(@beast_state);
+
+            // Advance turn
+            fight.is_player_turn = false;
+            fight.turn_number += 1;
+            world.write_model(@fight);
+
+            world.emit_event(@PlayerAttacked {
+                player,
+                game_id,
+                level,
+                turn: fight.turn_number,
+                target_beast_id,
+                damage,
+                beast_hp_after: beast_state.hp_current,
+                beast_is_alive: beast_state.is_alive,
+            });
+        }
+
+        // Enemies perform their turn; single active enemy for MVP
+        fn fight_enemy_turn(ref self: ContractState, game_id: u32, level: u32) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+
+            let mut fight: FightSession = world.read_model((game_id, level));
+            assert(fight.is_active, 'Fight not active');
+            assert(!fight.is_player_turn, 'Not enemy turn');
+
+            let mut beast_state: FightBeastState = world.read_model((game_id, level, 'monster_1'));
+            if !beast_state.is_alive {
+                // If no alive beast, end fight with victory
+                fight.is_active = false;
+                world.write_model(@fight);
+                world.emit_event(@FightEnded {
+                    player,
+                    game_id,
+                    level,
+                    ended_at: get_block_timestamp(),
+                    victory: true,
+                    enemies_defeated: 1,
+                    player_hp: fight.player_hp_current,
+                });
+                return ();
+            }
+
+            // Load level beast config for damage and compute enemy damage
+            let level_beast: LevelBeast = world.read_model(level);
+            let mut enemy_damage = level_beast.damage;
+            enemy_damage = match level_beast.beast_type {
+                BeastType::Monster => enemy_damage + 0,
+                BeastType::Dragon => enemy_damage + 10,
+                BeastType::Goblin => enemy_damage + 2,
+                BeastType::Orc => enemy_damage + 5,
+                BeastType::Demon => enemy_damage + 12,
+                BeastType::Undead => enemy_damage + 6,
+                BeastType::Elemental => enemy_damage + 8,
+            };
+
+            // Apply damage to player
+            if enemy_damage >= fight.player_hp_current {
+                fight.player_hp_current = 0;
+            } else {
+                fight.player_hp_current -= enemy_damage;
+            }
+
+            // Advance turn to player or end fight if player dead
+            let player_alive = fight.player_hp_current > 0;
+            if player_alive {
+                fight.is_player_turn = true;
+                fight.turn_number += 1;
+                world.write_model(@fight);
+            } else {
+                fight.is_active = false;
+                world.write_model(@fight);
+            }
+
+            world.emit_event(@EnemyAttacked {
+                player,
+                game_id,
+                level,
+                turn: fight.turn_number,
+                beast_id: beast_state.beast_id,
+                damage: enemy_damage,
+                player_hp_after: fight.player_hp_current,
+                player_is_alive: player_alive,
+            });
+
+            if !player_alive {
+                world.emit_event(@FightEnded {
+                    player,
+                    game_id,
+                    level,
+                    ended_at: get_block_timestamp(),
+                    victory: false,
+                    enemies_defeated: 0,
+                    player_hp: 0,
+                });
+            }
+        }
+
+        // Player flees; ends the fight as loss
+        fn fight_flee(ref self: ContractState, game_id: u32, level: u32) {
+            let mut world = self.world_default();
+            let player = get_caller_address();
+
+            let mut fight: FightSession = world.read_model((game_id, level));
+            assert(fight.is_active, 'Fight not active');
+
+            fight.is_active = false;
+            world.write_model(@fight);
+
+            world.emit_event(@FightEnded {
+                player,
+                game_id,
+                level,
+                ended_at: get_block_timestamp(),
+                victory: false,
+                enemies_defeated: 0,
+                player_hp: fight.player_hp_current,
+            });
         }
 
         // Player Stats & Inventory
