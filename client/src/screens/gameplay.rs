@@ -63,7 +63,8 @@ pub(super) fn plugin(app: &mut App) {
     .add_plugins(LevelManagerPlugin)
     .add_plugins(ObjectivesPlugin)
     .add_plugins(DialogPlugin)
-    .add_plugins(BookInteractionPlugin);
+    .add_plugins(BookInteractionPlugin)
+    .add_plugins(crate::systems::boundary::BoundaryPlugin);
 }
 
 // ===== SYSTEMS =====
@@ -277,7 +278,7 @@ impl PlayingScene {
         commands.spawn((
             Name::new("Directional Light"),
             DirectionalLight {
-                illuminance: 80_000.0,
+                illuminance: 15_000.0, // Reduced from 80_000 for softer lighting
                 shadows_enabled: true,
                 ..default()
             },
@@ -287,6 +288,53 @@ impl PlayingScene {
                 std::f32::consts::FRAC_PI_4,
                 0.0,
             )),
+            PlayingScene,
+        ));
+
+        // Add a second, softer directional light for fill lighting
+        commands.spawn((
+            Name::new("Fill Light"),
+            DirectionalLight {
+                illuminance: 5_000.0, // Much softer fill light
+                shadows_enabled: false, // No shadows for fill light
+                ..default()
+            },
+            Transform::from_rotation(Quat::from_euler(
+                EulerRot::XYZ,
+                -std::f32::consts::FRAC_PI_6, // Different angle
+                std::f32::consts::FRAC_PI_2, // Different angle
+                0.0,
+            )),
+            PlayingScene,
+        ));
+
+        // Add a warm point light for atmospheric lighting
+        commands.spawn((
+            Name::new("Atmospheric Point Light"),
+            PointLight {
+                color: Color::srgb(1.0, 0.9, 0.7), // Warm, golden light
+                intensity: 800.0, // Moderate intensity
+                range: 15.0, // Good range for atmospheric lighting
+                radius: 0.5,
+                shadows_enabled: false, // No shadows for point light to avoid performance issues
+                ..default()
+            },
+            Transform::from_xyz(0.0, 8.0, 0.0), // Position above the scene
+            PlayingScene,
+        ));
+
+        // Add a subtle rim light for depth
+        commands.spawn((
+            Name::new("Rim Light"),
+            PointLight {
+                color: Color::srgb(0.7, 0.8, 1.0), // Slight blue tint for contrast
+                intensity: 300.0, // Very subtle
+                range: 20.0, // Wide range for subtle effect
+                radius: 1.0,
+                shadows_enabled: false,
+                ..default()
+            },
+            Transform::from_xyz(-15.0, 5.0, 0.0), // Position to the side
             PlayingScene,
         ));
 
@@ -388,9 +436,9 @@ fn fallback_spawn_environment(
         
         // Set up ambient light
         commands.insert_resource(AmbientLight {
-            color: Color::srgb_u8(68, 71, 88),
-            brightness: 120.0,
-            ..default()
+            color: Color::srgb(0.8, 0.7, 0.6), // Warm, golden ambient light
+            brightness: 0.3, // Reduced brightness for more natural look
+            affects_lightmapped_meshes: false,
         });
 
         // Environment
@@ -420,6 +468,7 @@ fn fallback_spawn_collectibles(
     collectible_query: Query<Entity, With<crate::systems::collectibles::Collectible>>,
     _spatial_query: SpatialQuery,
     mut fallback_spawned: Local<bool>,
+    boundary_constraint: Option<Res<crate::systems::boundary::BoundaryConstraint>>,
 ) {
     // Only run once, and only if no collectible entities exist
     if *fallback_spawned || !collectible_query.is_empty() || collectible_spawner.coins_spawned > 0 {
@@ -447,6 +496,19 @@ fn fallback_spawn_collectibles(
                     angle.sin() * distance,
                 );
                 let potential_pos = *nav_pos + offset;
+
+                // Check boundary constraints
+                let mut within_bounds = true;
+                if let Some(constraint) = &boundary_constraint {
+                    within_bounds = potential_pos.x >= constraint.min_x 
+                        && potential_pos.x <= constraint.max_x 
+                        && potential_pos.z >= constraint.min_z 
+                        && potential_pos.z <= constraint.max_z;
+                }
+
+                if !within_bounds {
+                    continue;
+                }
 
                 let too_close = spawned_positions.iter().any(|&other_pos: &Vec3| {
                     potential_pos.distance(other_pos) < MIN_DISTANCE_BETWEEN_COINS

@@ -13,4 +13,16 @@ impl CharacterMovementConfig {
 
     // Movement threshold for stopping tiny residual movement
     pub const MIN_MOVEMENT_THRESHOLD: f32 = 0.01;
+
+    pub const RUN_TRIGGER_HOLD_TIME: f32 = 3.0;
+}
+
+pub struct CharacterAnimationConfig;
+
+impl CharacterAnimationConfig {
+    pub const IDLE: usize = 1;
+    pub const RUNNING: usize = 3;
+    pub const WALKING: usize = 4;
+    pub const FIGHT_MOVE_1: usize = 5;
+    pub const FIGHT_MOVE_2: usize = 6;
 }

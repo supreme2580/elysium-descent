@@ -6,3 +6,4 @@ pub mod dojo;
 pub mod enemy_ai;
 pub mod level_manager;
 pub mod objectives;
+pub mod boundary;

@@ -1,7 +1,8 @@
-use crate::constants::movement::CharacterMovementConfig;
+use crate::constants::movement::{CharacterAnimationConfig, CharacterMovementConfig};
 use avian3d::{math::*, prelude::*};
 use bevy::prelude::*;
 use bevy_gltf_animation::prelude::*;
+use crate::systems::boundary::BoundaryConstraint;
 
 pub struct CharacterControllerPlugin;
 
@@ -94,6 +95,17 @@ impl Default for JumpCooldown {
     }
 }
 
+const MOVEMENT_KEYS: [KeyCode; 8] = [
+    KeyCode::KeyW,
+    KeyCode::KeyA,
+    KeyCode::KeyS,
+    KeyCode::KeyD,
+    KeyCode::ArrowUp,
+    KeyCode::ArrowDown,
+    KeyCode::ArrowLeft,
+    KeyCode::ArrowRight,
+];
+
 /// Responds to [`MovementAction`] events and moves character controllers accordingly
 fn movement(
     time: Res<Time>,
@@ -106,15 +118,13 @@ fn movement(
     )>,
     mut jump_cooldown: ResMut<JumpCooldown>,
     keyboard: Res<ButtonInput<KeyCode>>,
+    boundary_constraint: Option<Res<BoundaryConstraint>>,
 ) {
     let delta_time = time.delta_secs();
     jump_cooldown.last_jump_time += delta_time;
 
     // Check if any movement keys are pressed
-    let is_movement_pressed = keyboard.any_pressed([
-        KeyCode::KeyW, KeyCode::KeyA, KeyCode::KeyS, KeyCode::KeyD,
-        KeyCode::ArrowUp, KeyCode::ArrowDown, KeyCode::ArrowLeft, KeyCode::ArrowRight,
-    ]);
+    let is_movement_pressed = keyboard.any_pressed(MOVEMENT_KEYS);
 
     for event in movement_event_reader.read() {
         for (jump_impulse, mut linear_velocity, mut transform, mut animation_state) in
@@ -151,23 +161,51 @@ fn movement(
 
                     // Apply movement with stability for running
                     let target_velocity = movement_direction * target_speed;
-
-                    // Use more stable interpolation for running
-                    let interpolation_factor = if animation_state.forward_hold_time >= 3.0 {
-                        // More stable interpolation for running
-                        (acceleration * delta_time).min(0.8)
+                    
+                    // Check boundary constraints before applying movement
+                    if let Some(constraint) = &boundary_constraint {
+                        let current_pos = transform.translation;
+                        let proposed_pos = current_pos + Vec3::new(target_velocity.x, 0.0, target_velocity.z) * delta_time;
+                        
+                        // Check if proposed position would be outside boundaries
+                        let would_be_outside = proposed_pos.x < constraint.min_x 
+                            || proposed_pos.x > constraint.max_x 
+                            || proposed_pos.z < constraint.min_z 
+                            || proposed_pos.z > constraint.max_z;
+                        
+                        // If movement would take us outside boundaries, reduce or stop movement
+                        if would_be_outside {
+                            // Calculate how much we can move without going outside boundaries
+                            let mut clamped_velocity = target_velocity;
+                            
+                            if proposed_pos.x < constraint.min_x || proposed_pos.x > constraint.max_x {
+                                clamped_velocity.x = 0.0;
+                            }
+                            if proposed_pos.z < constraint.min_z || proposed_pos.z > constraint.max_z {
+                                clamped_velocity.z = 0.0;
+                            }
+                            
+                            // Apply clamped velocity
+                            linear_velocity.x = linear_velocity.x.lerp(clamped_velocity.x, acceleration * delta_time);
+                            linear_velocity.z = linear_velocity.z.lerp(clamped_velocity.z, acceleration * delta_time);
+                        } else {
+                            // Normal movement within boundaries
+                            linear_velocity.x = linear_velocity.x.lerp(target_velocity.x, acceleration * delta_time);
+                            linear_velocity.z = linear_velocity.z.lerp(target_velocity.z, acceleration * delta_time);
+                        }
                     } else {
-                        // Normal interpolation for walking
-                        acceleration * delta_time
-                    };
+                        // No boundary constraints, apply normal movement
+                        linear_velocity.x = linear_velocity.x.lerp(target_velocity.x, acceleration * delta_time);
+                        linear_velocity.z = linear_velocity.z.lerp(target_velocity.z, acceleration * delta_time);
+                    }
 
-                    // Smoothly interpolate current velocity to target velocity
-                    linear_velocity.x = linear_velocity
-                        .x
-                        .lerp(target_velocity.x, interpolation_factor);
-                    linear_velocity.z = linear_velocity
-                        .z
-                        .lerp(target_velocity.z, interpolation_factor);
+                    // Update animation state
+                    let horizontal_speed = Vec2::new(linear_velocity.x, linear_velocity.z).length();
+                    if horizontal_speed > 0.1 {
+                        animation_state.forward_hold_time += delta_time;
+                    } else {
+                        animation_state.forward_hold_time = 0.0;
+                    }
                 }
                 MovementAction::Jump => {
                     if jump_cooldown.last_jump_time >= jump_cooldown.cooldown_duration {
@@ -193,7 +231,7 @@ fn movement(
             // Immediately stop horizontal movement
             linear_velocity.x = 0.0;
             linear_velocity.z = 0.0;
-            
+
             // Reset animation state for immediate idle
             animation_state.forward_hold_time = 0.0;
         }
@@ -206,10 +244,7 @@ fn apply_movement_damping(
     keyboard: Res<ButtonInput<KeyCode>>,
 ) {
     // Check if any movement keys are pressed
-    let is_movement_pressed = keyboard.any_pressed([
-        KeyCode::KeyW, KeyCode::KeyA, KeyCode::KeyS, KeyCode::KeyD,
-        KeyCode::ArrowUp, KeyCode::ArrowDown, KeyCode::ArrowLeft, KeyCode::ArrowRight,
-    ]);
+    let is_movement_pressed = keyboard.any_pressed(MOVEMENT_KEYS);
 
     for (mut linear_velocity, animation_state, _transform) in &mut query {
         // If no movement keys are pressed, immediately stop horizontal movement
@@ -266,15 +301,15 @@ pub struct AnimationState {
 
 /// Updates animations based on character movement
 fn update_animations(
-    mut query: Query<(&LinearVelocity, &mut GltfAnimations, &mut AnimationState), Without<crate::systems::enemy_ai::Enemy>>,
+    mut query: Query<
+        (&LinearVelocity, &mut GltfAnimations, &mut AnimationState),
+        Without<crate::systems::enemy_ai::Enemy>,
+    >,
     mut animation_players: Query<&mut AnimationPlayer>,
     keyboard: Res<ButtonInput<KeyCode>>,
 ) {
     // Check if any movement keys are pressed
-    let is_movement_pressed = keyboard.any_pressed([
-        KeyCode::KeyW, KeyCode::KeyA, KeyCode::KeyS, KeyCode::KeyD,
-        KeyCode::ArrowUp, KeyCode::ArrowDown, KeyCode::ArrowLeft, KeyCode::ArrowRight,
-    ]);
+    let is_movement_pressed = keyboard.any_pressed(MOVEMENT_KEYS);
 
     for (velocity, mut animations, mut animation_state) in &mut query {
         let horizontal_velocity = Vec2::new(velocity.x, velocity.z);
@@ -283,12 +318,14 @@ fn update_animations(
         // Check if fight moves are active
         if animation_state.fight_move_1 {
             // Play fight move 1 animation (index 5)
-            if animation_state.current_animation != 5 {
-                if let Some(animation) = animations.get_by_number(5) {
+            if animation_state.current_animation != CharacterAnimationConfig::FIGHT_MOVE_1 {
+                if let Some(animation) =
+                    animations.get_by_number(CharacterAnimationConfig::FIGHT_MOVE_1)
+                {
                     if let Ok(mut player) = animation_players.get_mut(animations.animation_player) {
                         player.stop_all();
                         player.play(animation);
-                        animation_state.current_animation = 5;
+                        animation_state.current_animation = CharacterAnimationConfig::FIGHT_MOVE_1;
                     }
                 }
             }
@@ -300,12 +337,14 @@ fn update_animations(
             }
         } else if animation_state.fight_move_2 {
             // Play fight move 2 animation (index 6)
-            if animation_state.current_animation != 6 {
-                if let Some(animation) = animations.get_by_number(6) {
+            if animation_state.current_animation != CharacterAnimationConfig::FIGHT_MOVE_2 {
+                if let Some(animation) =
+                    animations.get_by_number(CharacterAnimationConfig::FIGHT_MOVE_2)
+                {
                     if let Ok(mut player) = animation_players.get_mut(animations.animation_player) {
                         player.stop_all();
                         player.play(animation);
-                        animation_state.current_animation = 6;
+                        animation_state.current_animation = CharacterAnimationConfig::FIGHT_MOVE_2;
                     }
                 }
             }
@@ -318,11 +357,13 @@ fn update_animations(
         } else {
             // Normal movement animations - prioritize input over velocity for immediate response
             let target_animation = if !is_movement_pressed || !is_moving {
-                3 // Idle - immediately when no input or no movement
-            } else if animation_state.forward_hold_time >= 3.0 {
-                4 // Running
+                CharacterAnimationConfig::IDLE // Idle - immediately when no input or no movement
+            } else if animation_state.forward_hold_time
+                >= CharacterMovementConfig::RUN_TRIGGER_HOLD_TIME
+            {
+                CharacterAnimationConfig::RUNNING // Running
             } else {
-                7 // Regular walking
+                CharacterAnimationConfig::WALKING // Regular walking
             };
 
             // Only change animation if we need to
@@ -352,7 +393,7 @@ pub fn setup_idle_animation(
     let mut player = animation_players
         .get_mut(gltf_animations.animation_player)
         .unwrap();
-    let animation = gltf_animations.get_by_number(2).unwrap();
+    let animation = gltf_animations.get_by_number(1).unwrap();
     player.stop_all();
     player.play(animation).repeat();
 }
@@ -384,7 +425,7 @@ impl CharacterControllerBundle {
             movement: MovementBundle::new(CharacterMovementConfig::MOVEMENT_ACCELERATION, 0.9, 7.0),
             animation_state: AnimationState {
                 forward_hold_time: 0.0,
-                current_animation: 2, // Start with idle animation
+                current_animation: CharacterAnimationConfig::IDLE, // Start with idle animation
                 fight_move_1: false,
                 fight_move_2: false,
             },

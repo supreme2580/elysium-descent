@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy_gltf_animation::prelude::*;
 use avian3d::{math::*, prelude::*};
 use crate::systems::character_controller::AnimationState;
+use crate::systems::boundary::BoundaryConstraint;
 
 /// Marker component for enemy entities
 #[derive(Component)]
@@ -82,6 +83,7 @@ fn enemy_ai_movement(
     time: Res<Time>,
     mut enemy_query: Query<(&mut Transform, &mut LinearVelocity, &mut EnemyAI, &mut AnimationState), (With<Enemy>, Without<crate::systems::character_controller::CharacterController>)>,
     player_query: Query<&Transform, (With<crate::systems::character_controller::CharacterController>, Without<Enemy>)>,
+    boundary_constraint: Res<BoundaryConstraint>,
 ) {
     let delta_time = time.delta_secs();
     
@@ -104,9 +106,36 @@ fn enemy_ai_movement(
             let direction_to_player = (player_pos - enemy_pos).normalize();
             let target_velocity = direction_to_player * enemy_ai.move_speed;
             
-            // Apply movement
-            enemy_velocity.x = enemy_velocity.x.lerp(target_velocity.x, 5.0 * delta_time);
-            enemy_velocity.z = enemy_velocity.z.lerp(target_velocity.z, 5.0 * delta_time);
+            // Check boundary constraints before applying movement
+            let proposed_pos = enemy_pos + Vec3::new(target_velocity.x, 0.0, target_velocity.z) * delta_time;
+            
+            // Check if proposed position would be outside boundaries
+            let would_be_outside = proposed_pos.x < boundary_constraint.min_x 
+                || proposed_pos.x > boundary_constraint.max_x 
+                || proposed_pos.z < boundary_constraint.min_z 
+                || proposed_pos.z > boundary_constraint.max_z;
+            
+            // If movement would take us outside boundaries, reduce or stop movement
+            if would_be_outside {
+                // Calculate how much we can move without going outside boundaries
+                let mut clamped_velocity = target_velocity;
+                
+                if proposed_pos.x < boundary_constraint.min_x || proposed_pos.x > boundary_constraint.max_x {
+                    clamped_velocity.x = 0.0;
+                }
+                if proposed_pos.z < boundary_constraint.min_z || proposed_pos.z > boundary_constraint.max_z {
+                    clamped_velocity.z = 0.0;
+                }
+                
+                // Apply clamped velocity
+                enemy_velocity.x = enemy_velocity.x.lerp(clamped_velocity.x, 5.0 * delta_time);
+                enemy_velocity.z = enemy_velocity.z.lerp(clamped_velocity.z, 5.0 * delta_time);
+            } else {
+                // Normal movement within boundaries
+                enemy_velocity.x = enemy_velocity.x.lerp(target_velocity.x, 5.0 * delta_time);
+                enemy_velocity.z = enemy_velocity.z.lerp(target_velocity.z, 5.0 * delta_time);
+            }
+            
             enemy_velocity.y = 0.0;
             
             // Rotate to face player
