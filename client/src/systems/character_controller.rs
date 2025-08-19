@@ -2,6 +2,7 @@ use crate::constants::movement::CharacterMovementConfig;
 use avian3d::{math::*, prelude::*};
 use bevy::prelude::*;
 use bevy_gltf_animation::prelude::*;
+use crate::systems::boundary::BoundaryConstraint;
 
 pub struct CharacterControllerPlugin;
 
@@ -106,6 +107,7 @@ fn movement(
     )>,
     mut jump_cooldown: ResMut<JumpCooldown>,
     keyboard: Res<ButtonInput<KeyCode>>,
+    boundary_constraint: Option<Res<BoundaryConstraint>>,
 ) {
     let delta_time = time.delta_secs();
     jump_cooldown.last_jump_time += delta_time;
@@ -151,23 +153,51 @@ fn movement(
 
                     // Apply movement with stability for running
                     let target_velocity = movement_direction * target_speed;
-
-                    // Use more stable interpolation for running
-                    let interpolation_factor = if animation_state.forward_hold_time >= 3.0 {
-                        // More stable interpolation for running
-                        (acceleration * delta_time).min(0.8)
+                    
+                    // Check boundary constraints before applying movement
+                    if let Some(constraint) = &boundary_constraint {
+                        let current_pos = transform.translation;
+                        let proposed_pos = current_pos + Vec3::new(target_velocity.x, 0.0, target_velocity.z) * delta_time;
+                        
+                        // Check if proposed position would be outside boundaries
+                        let would_be_outside = proposed_pos.x < constraint.min_x 
+                            || proposed_pos.x > constraint.max_x 
+                            || proposed_pos.z < constraint.min_z 
+                            || proposed_pos.z > constraint.max_z;
+                        
+                        // If movement would take us outside boundaries, reduce or stop movement
+                        if would_be_outside {
+                            // Calculate how much we can move without going outside boundaries
+                            let mut clamped_velocity = target_velocity;
+                            
+                            if proposed_pos.x < constraint.min_x || proposed_pos.x > constraint.max_x {
+                                clamped_velocity.x = 0.0;
+                            }
+                            if proposed_pos.z < constraint.min_z || proposed_pos.z > constraint.max_z {
+                                clamped_velocity.z = 0.0;
+                            }
+                            
+                            // Apply clamped velocity
+                            linear_velocity.x = linear_velocity.x.lerp(clamped_velocity.x, acceleration * delta_time);
+                            linear_velocity.z = linear_velocity.z.lerp(clamped_velocity.z, acceleration * delta_time);
+                        } else {
+                            // Normal movement within boundaries
+                            linear_velocity.x = linear_velocity.x.lerp(target_velocity.x, acceleration * delta_time);
+                            linear_velocity.z = linear_velocity.z.lerp(target_velocity.z, acceleration * delta_time);
+                        }
                     } else {
-                        // Normal interpolation for walking
-                        acceleration * delta_time
-                    };
+                        // No boundary constraints, apply normal movement
+                        linear_velocity.x = linear_velocity.x.lerp(target_velocity.x, acceleration * delta_time);
+                        linear_velocity.z = linear_velocity.z.lerp(target_velocity.z, acceleration * delta_time);
+                    }
 
-                    // Smoothly interpolate current velocity to target velocity
-                    linear_velocity.x = linear_velocity
-                        .x
-                        .lerp(target_velocity.x, interpolation_factor);
-                    linear_velocity.z = linear_velocity
-                        .z
-                        .lerp(target_velocity.z, interpolation_factor);
+                    // Update animation state
+                    let horizontal_speed = Vec2::new(linear_velocity.x, linear_velocity.z).length();
+                    if horizontal_speed > 0.1 {
+                        animation_state.forward_hold_time += delta_time;
+                    } else {
+                        animation_state.forward_hold_time = 0.0;
+                    }
                 }
                 MovementAction::Jump => {
                     if jump_cooldown.last_jump_time >= jump_cooldown.cooldown_duration {

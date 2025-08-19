@@ -52,7 +52,8 @@ pub(super) fn plugin(app: &mut App) {
     .add_plugins(CollectiblesPlugin)
     .add_plugins(ObjectivesPlugin)
     .add_plugins(DialogPlugin)
-    .add_plugins(BookInteractionPlugin);
+    .add_plugins(BookInteractionPlugin)
+    .add_plugins(crate::systems::boundary::BoundaryPlugin);
 }
 
 // ===== SYSTEMS =====
@@ -383,6 +384,7 @@ fn fallback_spawn_collectibles(
     collectible_query: Query<Entity, With<crate::systems::collectibles::Collectible>>,
     _spatial_query: SpatialQuery,
     mut fallback_spawned: Local<bool>,
+    boundary_constraint: Option<Res<crate::systems::boundary::BoundaryConstraint>>,
 ) {
     // Only run once, and only if no collectible entities exist
     if *fallback_spawned || !collectible_query.is_empty() || collectible_spawner.coins_spawned > 0 {
@@ -410,6 +412,19 @@ fn fallback_spawn_collectibles(
                     angle.sin() * distance,
                 );
                 let potential_pos = *nav_pos + offset;
+
+                // Check boundary constraints
+                let mut within_bounds = true;
+                if let Some(constraint) = &boundary_constraint {
+                    within_bounds = potential_pos.x >= constraint.min_x 
+                        && potential_pos.x <= constraint.max_x 
+                        && potential_pos.z >= constraint.min_z 
+                        && potential_pos.z <= constraint.max_z;
+                }
+
+                if !within_bounds {
+                    continue;
+                }
 
                 let too_close = spawned_positions.iter().any(|&other_pos: &Vec3| {
                     potential_pos.distance(other_pos) < MIN_DISTANCE_BETWEEN_COINS
