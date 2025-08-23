@@ -1,9 +1,9 @@
-mod fight;
+pub mod fight;
 pub mod gameplay;
-mod loading;
-mod main_menu;
-mod pregame_loading;  // Add new module
-mod settings;
+pub mod loading;
+pub mod main_menu;
+pub mod pregame_loading;  // Add new module
+pub mod settings;
 
 use bevy::prelude::*;
 

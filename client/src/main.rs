@@ -41,6 +41,7 @@ fn main() -> AppExit {
         .add_plugins(assets::AssetsPlugin)
         .add_plugins(GameAudioPlugin)
         .add_plugins(SfxPlugin)
+        .add_plugins(resources::starknet::plugin)
         .add_event::<systems::collectibles::PickupItemEvent>()
         .add_plugins((screens::plugin, keybinding::plugin, ui::modal::ModalPlugin))
         .run()

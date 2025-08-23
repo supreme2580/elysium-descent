@@ -2,12 +2,15 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use avian3d::prelude::*;
 use std::collections::{HashMap, HashSet};
+use log::{info, error, warn};
 
 use crate::constants::collectibles::COIN_STREAMING_RADIUS;
 use crate::screens::Screen;
 use crate::systems::character_controller::CharacterController;
 use crate::assets::ModelAssets;
 use crate::resources::audio::{PlaySfxEvent, SfxType};
+use crate::resources::starknet::StarknetClient;
+use bevy::tasks::IoTaskPool;
 
 // ===== COMPONENTS & RESOURCES =====
 
@@ -153,8 +156,7 @@ impl Plugin for CollectiblesPlugin {
                     crate::ui::inventory::toggle_inventory_visibility,
                     crate::ui::inventory::adjust_inventory_for_dialogs,
                     track_player_movement,
-                )
-                    .run_if(in_state(Screen::GamePlay)),
+                ).run_if(in_state(Screen::GamePlay)),
             );
     }
 }
@@ -311,6 +313,7 @@ fn handle_coin_collisions(
     mut pickup_events: EventWriter<PickupItemEvent>,
     mut streaming_manager: ResMut<CoinStreamingManager>,
     mut sfx_events: EventWriter<PlaySfxEvent>,
+    starknet_client: Res<StarknetClient>,
 ) {
     // Get the player entity
     let Ok(player_entity) = player_query.single() else {
@@ -353,6 +356,34 @@ fn handle_coin_collisions(
                     item_type: *collectible_type,
                     item_entity: entity,
                 });
+
+                // Call Starknet uuid function when coin is collected
+                if starknet_client.initialized {
+                    info!("Coin collected! Calling Starknet uuid function...");
+                    
+                    // For now, let's call it directly to see the logs
+                    // In a production system, you'd want to handle this asynchronously
+                    let client_clone = starknet_client.clone();
+                    
+                    // Spawn the task and immediately log that we're doing it
+                    IoTaskPool::get().spawn(async move {
+                        info!("🚀 Starting blockchain transaction...");
+                        match client_clone.call_uuid_function().await {
+                            Ok(tx_hash) => {
+                                info!("✅ Starknet uuid function called successfully! Transaction hash: {}", tx_hash);
+                                Ok(tx_hash)
+                            }
+                            Err(e) => {
+                                error!("❌ Failed to call Starknet uuid function: {}", e);
+                                Err(e)
+                            }
+                        }
+                    }).detach();
+                    
+                    info!("📡 Blockchain transaction task spawned successfully");
+                } else {
+                    warn!("Starknet client not initialized, skipping blockchain call");
+                }
 
 
             }
