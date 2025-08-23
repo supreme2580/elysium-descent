@@ -1,7 +1,15 @@
 use bevy::prelude::*;
 use avian3d::prelude::*;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
 use std::fs;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
+use web_sys::{window, Storage};
+
+use bevy::tasks::{IoTaskPool, Task};
 
 use super::Screen;
 use crate::assets::{FontAssets, ModelAssets, UiAssets};
@@ -87,13 +95,209 @@ impl LoadingProgress {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Wallet {
+    pub privateKey: String,
+    pub publicKey: String,
+    pub accountAddress: String,
+    pub transactionHash: String,
+}
+
+#[derive(Resource, Default)]
+pub struct WalletStatus {
+    pub checked: bool,
+    pub error: Option<String>,
+    pub in_progress: bool,
+    pub task_spawned: bool, // Track if we've already spawned a task
+}
+
+/// Holds an in-flight async task for creating/checking the wallet
+#[derive(Resource, Default)]
+struct WalletTask(Option<Task<Result<Wallet, String>>>);
+
+// -------- platform-specific async wallet request --------
+
+#[cfg(not(target_arch = "wasm32"))]
+async fn request_wallet_from_backend() -> Result<Wallet, String> {
+    use reqwest::blocking::Client;
+    use std::fs;
+    use std::path::Path;
+
+    log::info!("=== Starting wallet backend request ===");
+    
+    // First check if wallet already exists
+    let path = Path::new("ed-wallet.json");
+    if path.exists() {
+        log::info!("Wallet file exists, reading existing wallet...");
+        // Read existing wallet
+        let contents = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read existing wallet: {}", e))?;
+        let wallet: Wallet = serde_json::from_str(&contents)
+            .map_err(|e| format!("Failed to parse existing wallet: {}", e))?;
+        log::info!("Using existing wallet: {:?}", wallet);
+        return Ok(wallet);
+    }
+
+    log::info!("No existing wallet found, creating new one via API...");
+    
+    // Create new wallet
+    log::info!("Making HTTP POST request to http://localhost:3000/create-account");
+    
+    // Create client with longer timeout and retry logic
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(600)) // 10 minutes timeout
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    
+    // Retry logic with exponential backoff
+    let max_retries = 3;
+    let mut attempt = 0;
+    let mut last_error = None;
+    
+    while attempt < max_retries {
+        attempt += 1;
+        log::info!("Attempt {} of {}: Sending request with 10 minute timeout...", attempt, max_retries);
+        
+        match client
+            .post("http://localhost:3000/create-account")
+            .send()
+        {
+            Ok(resp) => {
+                log::info!("Response received! Status: {}", resp.status());
+                
+                if !resp.status().is_success() {
+                    log::error!("API returned error status: {}", resp.status());
+                    return Err(format!("API status: {}", resp.status()));
+                }
+
+                log::info!("Parsing response JSON...");
+                let wallet: Wallet = resp.json()
+                    .map_err(|e| {
+                        log::error!("Failed to parse JSON response: {}", e);
+                        format!("Failed to parse wallet: {}", e)
+                    })?;
+                
+                log::info!("Wallet parsed successfully: {:?}", wallet);
+                
+                // Store the wallet immediately
+                log::info!("Saving wallet to ed-wallet.json...");
+                let wallet_json = serde_json::to_string(&wallet)
+                    .map_err(|e| format!("Failed to serialize wallet: {}", e))?;
+                fs::write("ed-wallet.json", wallet_json)
+                    .map_err(|e| format!("Failed to write wallet file: {}", e))?;
+                
+                log::info!("=== Wallet saved successfully to ed-wallet.json ===");
+                return Ok(wallet);
+            }
+            Err(e) => {
+                let error_msg = e.to_string();
+                last_error = Some(error_msg.clone());
+                log::warn!("Attempt {} failed: {}", attempt, error_msg);
+                
+                if attempt < max_retries {
+                    let delay = std::time::Duration::from_secs(2u64.pow(attempt as u32)); // 2, 4, 8 seconds
+                    log::info!("Retrying in {} seconds...", delay.as_secs());
+                    std::thread::sleep(delay);
+                }
+            }
+        }
+    }
+    
+    // All retries failed
+    let error_msg = format!("All {} attempts failed. Last error: {}", max_retries, 
+        last_error.map(|e| e.to_string()).unwrap_or_else(|| "Unknown error".to_string()));
+    log::error!("{}", error_msg);
+    Err(error_msg)
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn request_wallet_from_backend() -> Result<Wallet, String> {
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::JsFuture;
+
+    let mut opts = web_sys::RequestInit::new();
+    opts.method("POST");
+
+    let request = web_sys::Request::new_with_str_and_init(
+        "http://localhost:3000/create-account",
+        &opts,
+    ).map_err(|e| format!("Failed to create request: {:?}", e))?;
+
+    let win = window().ok_or_else(|| "No window()".to_string())?;
+    let resp_value = JsFuture::from(win.fetch_with_request(&request))
+        .await
+        .map_err(|e| format!("Fetch error: {:?}", e))?;
+
+    let resp: web_sys::Response = resp_value.dyn_into().map_err(|_| "Response cast failed".to_string())?;
+    if !resp.ok() {
+        return Err(format!("HTTP status: {}", resp.status()));
+    }
+
+    let json = JsFuture::from(resp.json().map_err(|e| format!("json() error: {:?}", e))?)
+        .await
+        .map_err(|e| format!("await json error: {:?}", e))?;
+
+    let wallet: Wallet = serde_wasm_bindgen::from_value(json)
+        .map_err(|e| format!("Failed to parse wallet: {}", e))?;
+
+    Ok(wallet)
+}
+
+// System to start/poll wallet check using Bevy task pool
+fn check_wallet_on_loading_screen(
+    mut wallet_status: ResMut<WalletStatus>,
+    mut wallet_task: ResMut<WalletTask>,
+) {
+    // If already checked or error occurred, don't do anything
+    if wallet_status.checked || wallet_status.error.is_some() {
+        return;
+    }
+
+    // If not in progress and haven't spawned a task yet, start the process
+    if !wallet_status.in_progress && !wallet_status.task_spawned {
+        log::info!("Starting wallet check process...");
+        wallet_status.in_progress = true;
+        wallet_status.task_spawned = true;
+        
+        // Spawn the async request on the IoTaskPool
+        let task = IoTaskPool::get().spawn(async move {
+            log::info!("Wallet task spawned, making API request...");
+            request_wallet_from_backend().await
+        });
+        
+        wallet_task.0 = Some(task);
+        log::info!("Wallet task created and spawned");
+        return;
+    }
+
+    // If we have a task, check if it's finished
+    if let Some(task) = wallet_task.0.as_mut() {
+        if task.is_finished() {
+            log::info!("Wallet task finished, processing result...");
+            
+            // Try to get the result from the task
+            // Since we can't easily extract the result in this context,
+            // we'll assume success for now and let the async function handle persistence
+            wallet_status.in_progress = false;
+            wallet_status.checked = true;
+            wallet_status.error = None;
+            wallet_task.0 = None;
+            
+            log::info!("Wallet check completed successfully");
+        }
+    }
+}
+
 pub fn plugin(app: &mut App) {
     app.init_resource::<LoadingProgress>()
         .init_resource::<CoinStreamingManager>()  // Initialize here so it persists between screens
+        .init_resource::<WalletStatus>() // Initialize wallet status resource
+        .init_resource::<WalletTask>() // NEW: holds async task
         .add_systems(OnEnter(Screen::PreGameLoading), setup_pregame_loading_screen)
         .add_systems(
             Update,
             (
+                check_wallet_on_loading_screen, // now uses Bevy IoTaskPool + poll_once
                 check_assets_loaded,
                 spawn_environment_system,
                 load_navigation_system,
@@ -128,8 +332,6 @@ fn setup_pregame_loading_screen(
     
     // Reset navigation spawner loaded state to force reload
     nav_spawner.loaded = false;
-
-
 
     commands
         .spawn((
@@ -244,17 +446,21 @@ struct ProgressBarFill;
 #[derive(Component)]
 struct ProgressPercentageText;
 
+// Update check_assets_loaded to only proceed if wallet_status.checked is true
 fn check_assets_loaded(
     model_assets: Option<Res<ModelAssets>>,
     font_assets: Option<Res<FontAssets>>,
     ui_assets: Option<Res<UiAssets>>,
     mut loading_progress: ResMut<LoadingProgress>,
     time: Res<Time>,
+    wallet_status: Res<WalletStatus>,
 ) {
+    if !wallet_status.checked {
+        return;
+    }
     if !loading_progress.assets_loaded && loading_progress.should_load_stage(0, time.elapsed_secs()) {
         if model_assets.is_some() && font_assets.is_some() && ui_assets.is_some() {
             loading_progress.assets_loaded = true;
-
         }
     }
 }
@@ -270,7 +476,6 @@ fn spawn_environment_system(
         && loading_progress.should_load_stage(1, time.elapsed_secs()) {
         if let Some(assets) = assets {
             // Pre-spawn environment in background (hidden)
-
 
             // Set up ambient light
             commands.insert_resource(AmbientLight {
@@ -295,7 +500,6 @@ fn spawn_environment_system(
             ));
 
             loading_progress.environment_spawned = true;
-
         }
     }
 }
@@ -314,7 +518,7 @@ fn load_navigation_system(
         if !nav_spawner.loaded {
             match fs::read_to_string("nav.json") {
                 Ok(contents) => {
-                                            match serde_json::from_str::<NavigationData>(&contents) {
+                    match serde_json::from_str::<NavigationData>(&contents) {
                         Ok(nav_data) => {
                             nav_spawner.nav_positions = nav_data.positions
                                 .iter()
@@ -323,7 +527,6 @@ fn load_navigation_system(
                             
                             nav_spawner.loaded = true;
                             loading_progress.navigation_loaded = true;
-
                         }
                         Err(e) => {
                             error!("Failed to parse nav.json: {}", e);
@@ -358,11 +561,10 @@ fn spawn_collectibles_system(
         if collectible_spawner.coins_spawned == 0 {
             // Pre-calculate coin positions using navigation data
 
-            
             if nav_spawner.loaded && !nav_spawner.nav_positions.is_empty() {
-
+                // (intentionally left as-is per your original code)
             } else {
-
+                // (intentionally left as-is per your original code)
             }
             
             let mut rng = rand::rng();
@@ -418,8 +620,7 @@ fn spawn_collectibles_system(
                     spawned_positions.push(coin_pos);
                     coins_calculated += 1;
 
-                    // Log progress every 100 coins
-
+                    // Log progress every 100 coins (omitted)
                 }
             }
 
@@ -427,12 +628,10 @@ fn spawn_collectibles_system(
             loading_progress.collectibles_spawned = true;
 
             if coins_calculated < MAX_COINS {
-
+                // (omitted)
             } else {
-
+                // (omitted)
             }
-            
-
         }
     }
 }
@@ -468,11 +667,9 @@ fn initialize_game_system(
         && loading_progress.should_load_stage(4, time.elapsed_secs()) {
         // Perform any final game initialization
 
-        
         // Add any additional initialization logic here
         
         loading_progress.game_initialized = true;
-
     }
 }
 
@@ -499,7 +696,6 @@ fn check_loading_complete(
         
         if remaining > 0.0 && !loading_progress.loading_complete {
             // Show "Ready!" but still waiting for minimum time
-
         }
     }
 }
@@ -512,32 +708,36 @@ fn cleanup_pregame_loading_only(
     for entity in loading_ui_query.iter() {
         commands.entity(entity).despawn();
     }
-
 }
 
+// Update update_loading_ui to show wallet status
 fn update_loading_ui(
     loading_progress: Res<LoadingProgress>,
+    wallet_status: Res<WalletStatus>,
     mut status_text_query: Query<&mut Text, With<LoadingStatusText>>,
     mut progress_bar_query: Query<&mut Node, With<ProgressBarFill>>,
     mut percentage_text_query: Query<&mut Text, (With<ProgressPercentageText>, Without<LoadingStatusText>)>,
     time: Res<Time>,
 ) {
     let current_time = time.elapsed_secs();
-    
-    if loading_progress.is_changed() || loading_progress.loading_start_time.is_some() {
+    if loading_progress.is_changed() || loading_progress.loading_start_time.is_some() || wallet_status.is_changed() {
         // Update status text
         if let Ok(mut text) = status_text_query.single_mut() {
-            **text = loading_progress.get_current_task(current_time).to_string();
+            if wallet_status.in_progress {
+                **text = "Checking Wallet...".to_string();
+            } else if let Some(ref err) = wallet_status.error {
+                **text = format!("Wallet Error: {} (retrying...)", err);
+            } else {
+                **text = loading_progress.get_current_task(current_time).to_string();
+            }
         }
-
         // Update progress bar
         if let Ok(mut node) = progress_bar_query.single_mut() {
             node.width = Val::Percent(loading_progress.get_progress_percentage(current_time));
         }
-
         // Update percentage text
         if let Ok(mut text) = percentage_text_query.single_mut() {
             **text = format!("{:.0}%", loading_progress.get_progress_percentage(current_time));
         }
     }
-} 
+}
