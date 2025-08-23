@@ -9,7 +9,7 @@
 - **3D Environment**: Static environment with collision detection
 - **Camera System**: Third-person camera that follows player
 - **Physics Integration**: Proper collision detection and ground snapping
-- **Blockchain Integration**: Dojo framework ready for on-chain game logic
+
 
 ## **Phase 1: Core Gameplay Foundation (High Priority)**
 
@@ -97,7 +97,7 @@
 - Spell/ability effects
 - Environmental effects (fire, water)
 
-### 12. **Blockchain Integration**
+
 - On-chain player progress
 - NFT items/achievements
 - Leaderboards
@@ -110,13 +110,13 @@
 - All systems should follow Bevy 0.16 patterns (Required Components, error handling)
 - Use observer system for reactive gameplay events
 - Leverage GPU-driven rendering for performance
-- Maintain compatibility with Dojo blockchain framework
+
 
 ### Architecture Patterns
 - Component-driven design for all game entities
 - Event-driven system communication
 - Modular plugin architecture
-- Clean separation between gameplay and blockchain logic
+
 
 ### Asset Requirements
 - Monster models and animations

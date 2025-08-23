@@ -12,5 +12,5 @@
 - [Technical Documentation](./td/architecture.md)
   - [Programming Standards](./td/programming_standards.md)
   - [Engine](./td/engine.md)
-  - [Blockchain](./td/blockchain.md)
+  
 - [Changelog](./changelog.md)

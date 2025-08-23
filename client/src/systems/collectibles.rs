@@ -6,7 +6,6 @@ use std::collections::{HashMap, HashSet};
 use crate::constants::collectibles::COIN_STREAMING_RADIUS;
 use crate::screens::Screen;
 use crate::systems::character_controller::CharacterController;
-use crate::systems::dojo::PickupItemEvent;
 use crate::assets::ModelAssets;
 use crate::resources::audio::{PlaySfxEvent, SfxType};
 
@@ -48,6 +47,12 @@ pub struct NextItemToAdd(pub CollectibleType);
 #[derive(Resource)]
 pub struct CollectibleSpawner {
     pub coins_spawned: usize,
+}
+
+#[derive(Event)]
+pub struct PickupItemEvent {
+    pub item_type: CollectibleType,
+    pub item_entity: Entity,
 }
 
 impl Default for CollectibleSpawner {
@@ -343,7 +348,7 @@ fn handle_coin_collisions(
                 commands.insert_resource(NextItemToAdd(*collectible_type));
                 // Despawn the entity immediately
                 commands.entity(entity).despawn();
-                // Trigger blockchain event
+                // Trigger collection event
                 pickup_events.write(PickupItemEvent {
                     item_type: *collectible_type,
                     item_entity: entity,

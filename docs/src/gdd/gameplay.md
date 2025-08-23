@@ -43,12 +43,12 @@ This phase focuses on dynamic movement, strategic positioning, and real-time com
 
 ## Turn-Based On-Chain Combat (Loot Survivor Dungeons)
 
-This phase shifts to a strategic, turn-based encounter against a unique boss generated and managed on the blockchain.
+This phase shifts to a strategic, turn-based encounter against a unique boss.
 
 ### Transition to Dungeons
 
 * **Activation:** This might involve interacting with a specific point or a UI prompt.
-* **On-Chain Interaction:** Uses `bevy_dojo` i.e. torii, controller & `starknet-rs`.
+
 
 ### Combat Mechanics
 

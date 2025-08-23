@@ -9,17 +9,14 @@ pub fn plugin(app: &mut App) {
         .add_plugins(EnhancedInputPlugin)
         .add_input_context::<Player>()
         .add_input_context::<SystemInput>()
-        .add_input_context::<DojoInput>()
         .add_observer(handle_toggle_fullscreen)
         .add_observer(handle_return_to_menu)
         .add_observer(player_binding)
         .add_observer(global_binding)
-        .add_observer(dojo_binding)
         .add_observer(apply_movement)
         .add_observer(jump)
         .add_observer(sprint_started)
         .add_observer(sprint_completed)
-        .add_observer(handle_create_game)
         .add_observer(handle_interact)
         .add_observer(handle_fight_move)
         .add_observer(handle_go_to_fight_scene);
@@ -27,7 +24,6 @@ pub fn plugin(app: &mut App) {
 
 fn spawn_system_action(mut commands: Commands) {
     commands.spawn(Actions::<SystemInput>::default());
-    commands.spawn(Actions::<DojoInput>::default());
 }
 
 fn player_binding(trigger: Trigger<Binding<Player>>, mut players: Query<&mut Actions<Player>>) {
@@ -86,20 +82,7 @@ fn global_binding(
     }
 }
 
-fn dojo_binding(
-    trigger: Trigger<Binding<DojoInput>>,
-    mut dojo_actions: Query<&mut Actions<DojoInput>>,
-) {
-    if let Ok(mut actions) = dojo_actions.get_mut(trigger.target()) {
-        // Create Game (G key)
-        actions.bind::<CreateGame>().to(KeyCode::KeyG);
-    } else {
-        error!(
-            "Failed to get dojo actions for entity {:?}",
-            trigger.target()
-        );
-    }
-}
+
 
 // Forward movement and jump events to the character controller
 fn apply_movement(
@@ -192,14 +175,7 @@ struct ToggleFullScreen;
 #[input_action(output = bool)]
 struct ReturnToMainMenu;
 
-/// Input context for Dojo blockchain interactions
-#[derive(InputContext)]
-pub struct DojoInput;
 
-/// Action for creating a new game on the blockchain
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-struct CreateGame;
 
 fn handle_toggle_fullscreen(
     trigger: Trigger<Started<ToggleFullScreen>>,
@@ -238,14 +214,7 @@ fn handle_return_to_menu(
     }
 }
 
-fn handle_create_game(
-    trigger: Trigger<Started<CreateGame>>,
-    mut create_game_events: EventWriter<crate::systems::dojo::CreateGameEvent>,
-) {
-    if trigger.value {
-        create_game_events.write(crate::systems::dojo::CreateGameEvent);
-    }
-}
+
 
 fn handle_interact(
     trigger: Trigger<Started<Interact>>,

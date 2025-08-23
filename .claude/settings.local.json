@@ -1,7 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(sozo test:*)",
+      
       "Bash(cargo:*)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:docs.rs)"

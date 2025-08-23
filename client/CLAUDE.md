@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Elysium Descent is a blockchain-integrated roguelike game with:
+Elysium Descent is a roguelike game with:
 - **Client**: Rust/Bevy 0.16.0 game engine with ECS architecture
-- **Blockchain**: Cairo/Starknet smart contracts using Dojo framework
-- **Architecture**: Fully On-Chain Game (FOCG) where game logic runs on Starknet
+
+- **Architecture**: Local roguelike game with offline gameplay
 
 ## Development Commands
 
@@ -22,36 +22,14 @@ cargo fmt               # Format code
 cargo clippy            # Lint code
 ```
 
-### Contracts (Cairo/Starknet)
-```bash
-cd contracts
-scarb build             # Build Cairo contracts
-sozo build              # Build using Dojo CLI
-sozo test               # Run contract tests
-sozo migrate            # Deploy contracts
-```
+
+
 
 ### Local Development Environment
 
-#### Using Docker (Recommended):
+#### Manual Setup:
 ```bash
-cd contracts
-docker compose up       # Starts Katana, Sozo, and Torii
-```
-
-#### Manual Setup (4 terminals):
-```bash
-# Terminal 1: Local blockchain
-katana --dev --dev.no-fee
-
-# Terminal 2: Deploy contracts
-cd contracts
-sozo build && sozo migrate
-
-# Terminal 3: Indexer (use WORLD_ADDRESS from Terminal 2)
-torii --world <WORLD_ADDRESS> --http.cors_origins "*"
-
-# Terminal 4: Run client
+# Run client
 cd client
 cargo run
 ```
@@ -61,7 +39,7 @@ cargo run
 ### Client Architecture (Bevy ECS)
 - **Systems** (`src/systems/`): Game logic components
   - `character_controller.rs`: Player movement and controls
-  - `dojo/`: Blockchain integration systems
+  
   - `collectibles.rs`: Item collection mechanics
 - **Screens** (`src/screens/`): Game states and UI screens
   - `gameplay.rs`: Main game loop
@@ -75,8 +53,8 @@ cargo run
 - **avian3d**: Physics simulation
 - **bevy_kira_audio**: Audio system
 - **bevy_lunex**: UI framework
-- **dojo_bevy_plugin**: Blockchain integration
-- **starknet**: Blockchain interaction
+
+
 
 ### Development Guidelines
 1. **Rust Standards**: Use Rust 1.87.0+, follow standard naming conventions
@@ -148,11 +126,8 @@ commands.spawn((Child, ChildOf(parent_entity)));
 For detailed migration examples, breaking changes, and performance optimizations, see:
 **📖 [Complete Bevy 0.16 Guide](./AI_DOCS/Bevy.md)**
 
-### Blockchain Integration
-The game uses Dojo framework to connect Bevy client with Starknet:
-- Connection constants in `src/constants/dojo_constants.rs`
-- Setup system in `src/systems/dojo/setup.rs`
-- Game creation in `src/systems/dojo/create_game.rs`
+
+
 
 ### Asset Organization
 - `assets/audio/`: Sound effects and music
@@ -163,4 +138,4 @@ The game uses Dojo framework to connect Bevy client with Starknet:
 ### Current Development
 - Active branch: `feat/yarn-spinner`
 - Main branch for PRs: `main`
-- Recent focus: Character movement, Dojo integration, input handling
+- Recent focus: Character movement, input handling

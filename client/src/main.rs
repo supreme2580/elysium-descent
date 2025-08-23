@@ -2,7 +2,6 @@ use bevy::window::{PresentMode, WindowMode, WindowResolution};
 use bevy::{prelude::*, render::view::RenderLayers};
 use bevy_kira_audio::prelude::*;
 use bevy_lunex::prelude::*;
-use dojo_bevy_plugin::{DojoResource, TokioRuntime};
 // Removed unused import - PhysicsDebugPlugin is currently disabled
 
 mod constants;
@@ -39,16 +38,11 @@ fn main() -> AppExit {
         .add_plugins(UiLunexPlugins)
         .add_plugins(AudioPlugin)
         // .add_plugins(PhysicsDebugPlugin::default()) // Temporarily disabled for performance
-        .init_resource::<DojoResource>()
-        .init_resource::<TokioRuntime>()
-        // .add_plugins(DojoPlugin) // Temporarily disabled for testing
         .add_plugins(assets::AssetsPlugin)
         .add_plugins(GameAudioPlugin)
         .add_plugins(SfxPlugin)
-        .add_event::<systems::dojo::pickup_item::PickupItemEvent>()
-        .add_event::<systems::dojo::pickup_item::ItemPickedUpEvent>()
-        .add_event::<systems::dojo::pickup_item::ItemPickupFailedEvent>()
-        .add_plugins((screens::plugin, keybinding::plugin, /* dojo::plugin, */ ui::modal::ModalPlugin))
+        .add_event::<systems::collectibles::PickupItemEvent>()
+        .add_plugins((screens::plugin, keybinding::plugin, ui::modal::ModalPlugin))
         .run()
 }
 

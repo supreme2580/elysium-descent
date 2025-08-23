@@ -1,6 +1,6 @@
 # Contributing to Elysium Descent
 
-Welcome to Elysium Descent! We're excited that you're interested in contributing to our Bevy-based roguelike game with blockchain integration. This guide will help you get started with contributing to the project.
+Welcome to Elysium Descent! We're excited that you're interested in contributing to our Bevy-based roguelike game. This guide will help you get started with contributing to the project.
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@ Welcome to Elysium Descent! We're excited that you're interested in contributing
   - [Code Contributions](#code-contributions)
 - [Development Guidelines](#development-guidelines)
   - [Rust Guidelines](#rust-guidelines)
-  - [Cairo/Starknet Guidelines](#cairo-starknet-guidelines)
+  
   - [Game Design Principles](#game-design-principles)
 - [Testing](#testing)
 - [Documentation](#documentation)
@@ -42,15 +42,12 @@ Before you begin, ensure you have the following installed:
 - Rust 1.87.0 or later
 - Cargo (comes with Rust)
 
-**For Smart Contracts (Cairo/Starknet):**
-- Scarb 2.10.1
-- Katana (local Starknet devnet)
-- Sozo (Dojo CLI)
-- Torii (Dojo indexer)
+
+
 
 **Optional but Recommended:**
 - Docker and Docker Compose
-- VS Code with Rust Analyzer and Cairo extensions
+- VS Code with Rust Analyzer extension
 
 ### Development Setup
 
@@ -66,10 +63,10 @@ Before you begin, ensure you have the following installed:
    cargo build
    ```
 
-3. **Set up the Smart Contracts**
+
    ```bash
-   cd contracts
-   scarb build
+   
+   
    ```
 
 4. **Run the Development Environment**
@@ -81,15 +78,13 @@ Before you begin, ensure you have the following installed:
 
    Or manually:
    ```bash
-   # Terminal 1: Run local blockchain
-   katana --dev --dev.no-fee
+   
+   
 
-   # Terminal 2: Deploy contracts
-   sozo build
-   sozo migrate
+   
+   
 
-   # Terminal 3: Run indexer (replace <WORLD_ADDRESS> with actual address)
-   torii --world <WORLD_ADDRESS> --http.cors_origins "*"
+   
 
    # Terminal 4: Run game client
    cd client
@@ -103,11 +98,9 @@ elysium_descent/
 ├── client/                 # Bevy game client
 │   ├── src/               # Rust source code
 │   └── Cargo.toml         # Rust dependencies
-├── contracts/             # Cairo smart contracts
-│   ├── src/              # Cairo source code
-│   └── Scarb.toml        # Cairo dependencies
+
 ├── crates/               # Shared Rust crates
-│   └── bevy_dojo/        # Bevy-Dojo integration
+
 ├── packages/             # Shared packages
 └── README.md            # Project overview
 ```
@@ -133,7 +126,7 @@ We welcome feature suggestions! Please:
 2. Use the feature request template
 3. Clearly describe the feature and its benefits
 4. Explain how it fits with the game's vision
-5. Consider blockchain integration aspects if relevant
+
 
 ### Code Contributions
 
@@ -178,15 +171,7 @@ cd client
 cargo test
 ```
 
-### Contract Testing
-```bash
-cd contracts
-sozo test
-```
 
-### Integration Testing
-- Test client-contract interaction
-- Check event emissions and indexing
 
 ## Documentation
 
@@ -252,12 +237,7 @@ We value all contributions! Contributors will be:
 - Study Bevy's scheduling and stages
 - Practice with smaller examples first
 
-### Blockchain Development
 
-- Understand Cairo language basics
-- Learn about Starknet architecture
-- Study Dojo framework patterns
-- Test with local devnet before mainnet
 
 ## License
 
