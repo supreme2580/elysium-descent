@@ -14,6 +14,7 @@ use crate::systems::character_controller::{
 use crate::systems::book_interaction::BookInteractionPlugin;
 use crate::systems::collectibles::{CollectiblesPlugin, NavigationBasedSpawner, CollectibleSpawner, CoinStreamingManager};
 use crate::systems::objectives::ObjectivesPlugin;
+use crate::systems::enemy_ai::EnemyAIPlugin;
 use crate::ui::dialog::DialogPlugin;
 use crate::ui::inventory::spawn_inventory_ui;
 use crate::ui::styles::ElysiumDescentColorPalette;
@@ -53,7 +54,8 @@ pub(super) fn plugin(app: &mut App) {
     .add_plugins(ObjectivesPlugin)
     .add_plugins(DialogPlugin)
     .add_plugins(BookInteractionPlugin)
-    .add_plugins(crate::systems::boundary::BoundaryPlugin);
+    .add_plugins(crate::systems::boundary::BoundaryPlugin)
+    .add_plugins(EnemyAIPlugin);
 }
 
 // ===== SYSTEMS =====
@@ -320,6 +322,24 @@ impl PlayingScene {
                 PlayingScene,
             ))
             .observe(setup_idle_animation);
+
+        // Add enemy with AI
+        commands.spawn((
+            Name::new("Gameplay Enemy"),
+            GltfSceneRoot::new(assets.enemy.clone()),
+            Transform {
+                translation: Vec3::new(10.0, -1.65, 5.0), // Position enemy away from player
+                rotation: Quat::from_rotation_y(std::f32::consts::PI),
+                scale: Vec3::splat(4.0),
+                ..default()
+            },
+            crate::systems::enemy_ai::EnemyBundle::default(),
+            Friction::new(0.5),
+            Restitution::new(0.0),
+            GravityScale(1.0),
+            CollisionEventsEnabled, // Enable collision events
+            PlayingScene,
+        )).observe(setup_idle_animation);
 
         // Add camera
         commands.spawn((
