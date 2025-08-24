@@ -1,12 +1,12 @@
 use bevy::prelude::*;
-use log::{info, error};
+use log::{info, error, warn};
 
 use crate::screens::pregame_loading::Wallet;
 
 // Starknet configuration
 const SEPOLIA_RPC_URL: &str = "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
 const CONTRACT_ADDRESS: &str = "0x1d3be0144b9a1d96f8ea55ad581c5a1ab2281837821c6e9c1aa6c37b35b7d5f";
-const UUID_SELECTOR: &str = "0x75656964"; // hash of "uuid"
+const UUID_SELECTOR: &str = "0x2ee0e84a99e5b3cb20adcdbe548dd1ab3bb535bdd690595e43594707778be82"; // actual uuid selector from Voyager
 
 #[derive(Resource, Default, Clone)]
 pub struct StarknetClient {
@@ -30,12 +30,10 @@ impl StarknetClient {
         info!("Contract address: {}", CONTRACT_ADDRESS);
         info!("RPC endpoint: {}", SEPOLIA_RPC_URL);
         
-        info!("✅ Using Blast API public endpoint for Sepolia testnet");
-
         self.wallet = Some(wallet.clone());
         self.initialized = true;
         
-        info!("Starknet client initialized successfully");
+        info!("✅ Starknet HTTP client initialized successfully");
         info!("Ready to make blockchain calls to contract: {}", CONTRACT_ADDRESS);
         Ok(())
     }
@@ -50,18 +48,362 @@ impl StarknetClient {
         info!("   Network: Sepolia testnet");
         info!("   RPC endpoint: {}", SEPOLIA_RPC_URL);
         
-        // TODO: Implement actual Starknet call here
-        // For now, we'll simulate the call
-        info!("🚀 Executing actual blockchain transaction...");
-        info!("   This would call the uuid() function on the contract");
-        info!("   Parameters: none");
+        // Retry logic with exponential backoff
+        let max_retries = 3;
+        let mut attempt = 0;
+        let mut last_error = None;
         
-        // Simulate transaction execution
-        let tx_hash = "0x9876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba";
-        info!("✅ Transaction successful! Hash: {}", tx_hash);
-        info!("   Status: Accepted");
+        while attempt < max_retries {
+            attempt += 1;
+            info!("Attempt {} of {} for contract call...", attempt, max_retries);
+            
+            let result = {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    self.call_uuid_native().await
+                }
+                
+                #[cfg(target_arch = "wasm32")]
+                {
+                    self.call_uuid_wasm().await
+                }
+            };
+            
+            match result {
+                Ok(value) => {
+                    info!("✅ Contract call successful on attempt {}", attempt);
+                    return Ok(value);
+                }
+                Err(e) => {
+                    last_error = Some(e.clone());
+                    warn!("Attempt {} failed: {}", attempt, e);
+                    
+                    if attempt < max_retries {
+                        let delay_ms = (2_u64.pow(attempt as u32)) * 1000; // 2, 4, 8 seconds
+                        info!("Retrying in {}ms...", delay_ms);
+                        
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            // Use std::thread::sleep since we're not in a Tokio context
+                            let delay_duration = std::time::Duration::from_millis(delay_ms);
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            std::thread::spawn(move || {
+                                std::thread::sleep(delay_duration);
+                                let _ = tx.send(());
+                            });
+                            let _ = rx.recv();
+                        }
+                        
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            // WASM sleep using timeout
+                            use wasm_bindgen_futures::JsFuture;
+                            use wasm_bindgen::closure::Closure;
+                            use web_sys::{window};
+                            
+                            if let Some(window) = window() {
+                                let promise = js_sys::Promise::new(&mut |resolve, _| {
+                                    let closure = Closure::once_into_js(move || {
+                                        resolve.call0(&wasm_bindgen::JsValue::undefined()).unwrap();
+                                    });
+                                    window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                        closure.as_ref().unchecked_ref(), delay_ms as i32
+                                    ).unwrap();
+                                });
+                                let _ = JsFuture::from(promise).await;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
-        Ok(tx_hash.to_string())
+        // All retries failed
+        let error_msg = format!(
+            "All {} attempts failed. Last error: {}",
+            max_retries,
+            last_error.unwrap_or_else(|| "Unknown error".to_string())
+        );
+        error!("❌ {}", error_msg);
+        Err(error_msg)
+    }
+    
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn call_uuid_native(&self) -> Result<String, String> {
+        info!("🚀 Executing actual blockchain call (native)...");
+        
+        // Run in thread pool without Tokio async context
+        let (tx, rx) = std::sync::mpsc::channel();
+        
+        std::thread::spawn(move || {
+            let result = Self::blocking_contract_call();
+            let _ = tx.send(result);
+        });
+        
+        // Wait for result with timeout
+        match rx.recv_timeout(std::time::Duration::from_secs(30)) {
+            Ok(result) => result,
+            Err(_) => Err("Contract call timeout".to_string()),
+        }
+    }
+    
+    #[cfg(not(target_arch = "wasm32"))]
+    fn blocking_contract_call() -> Result<String, String> {
+        // Prepare JSON-RPC call using blocking reqwest
+        let call_data = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "starknet_call",
+            "params": {
+                "request": {
+                    "contract_address": CONTRACT_ADDRESS,
+                    "entry_point_selector": UUID_SELECTOR,
+                    "calldata": []
+                },
+                "block_id": "latest"
+            },
+            "id": 1
+        });
+        
+        let client = reqwest::blocking::Client::new();
+        let response = client
+            .post(SEPOLIA_RPC_URL)
+            .header("Content-Type", "application/json")
+            .json(&call_data)
+            .send()
+            .map_err(|e| format!("HTTP request failed: {}", e))?;
+        
+        if !response.status().is_success() {
+            return Err(format!("HTTP error: {}", response.status()));
+        }
+        
+        let response_obj: serde_json::Value = response
+            .json()
+            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+        
+        if let Some(error) = response_obj.get("error") {
+            error!("❌ Contract call failed: {:?}", error);
+            return Err(format!("RPC error: {:?}", error));
+        }
+        
+        if let Some(result) = response_obj.get("result") {
+            info!("✅ Contract call successful!");
+            info!("   📄 Full RPC Response: {}", serde_json::to_string_pretty(&response_obj).unwrap_or_else(|_| "Failed to serialize".to_string()));
+            info!("   📊 Result Data: {:?}", result);
+            
+            // Extract UUID value from result array
+            let uuid_value = if let Some(values) = result.as_array() {
+                if !values.is_empty() {
+                    values[0].as_str().unwrap_or("Unknown").to_string()
+                } else {
+                    "No return value".to_string()
+                }
+            } else {
+                "Invalid result format".to_string()
+            };
+            
+            info!("   🎯 UUID Value: {}", uuid_value);
+            
+            // Now get transaction receipt for this block
+            Self::get_latest_block_info_blocking();
+            
+            Ok(uuid_value)
+        } else {
+            Err("No result in response".to_string())
+        }
+    }
+    
+    #[cfg(not(target_arch = "wasm32"))]
+    fn get_latest_block_info_blocking() {
+        // Get latest block information for transaction context
+        std::thread::spawn(|| {
+            let block_data = serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "starknet_getBlockWithTxHashes",
+                "params": ["latest"],
+                "id": 2
+            });
+            
+            let client = reqwest::blocking::Client::new();
+            if let Ok(response) = client
+                .post(SEPOLIA_RPC_URL)
+                .header("Content-Type", "application/json")
+                .json(&block_data)
+                .send()
+            {
+                if let Ok(block_obj) = response.json::<serde_json::Value>() {
+                    if let Some(result) = block_obj.get("result") {
+                        if let Some(block_number) = result.get("block_number") {
+                            info!("   📦 Latest Block Number: {}", block_number);
+                        }
+                        if let Some(block_hash) = result.get("block_hash") {
+                            info!("   🔒 Block Hash: {}", block_hash.as_str().unwrap_or("Unknown"));
+                        }
+                        if let Some(timestamp) = result.get("timestamp") {
+                            info!("   ⏰ Block Timestamp: {}", timestamp);
+                        }
+                        if let Some(transactions) = result.get("transactions") {
+                            if let Some(tx_array) = transactions.as_array() {
+                                info!("   🔄 Transactions in Block: {}", tx_array.len());
+                                if !tx_array.is_empty() {
+                                    info!("   📝 Recent Transaction Hashes:");
+                                    for (i, tx) in tx_array.iter().take(3).enumerate() {
+                                        if let Some(tx_hash) = tx.as_str() {
+                                            info!("      {}. {}", i + 1, tx_hash);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    #[cfg(target_arch = "wasm32")]
+    async fn call_uuid_wasm(&self) -> Result<String, String> {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen_futures::JsFuture;
+        use web_sys::{window, RequestInit, Request, Response};
+        
+        info!("🚀 Executing actual blockchain call (WASM)...");
+        
+        let window = window().ok_or("No window object")?;
+        
+        // Prepare JSON-RPC call
+        let call_data = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "starknet_call",
+            "params": {
+                "request": {
+                    "contract_address": CONTRACT_ADDRESS,
+                    "entry_point_selector": UUID_SELECTOR,
+                    "calldata": []
+                },
+                "block_id": "latest"
+            },
+            "id": 1
+        });
+        
+        let mut opts = RequestInit::new();
+        opts.method("POST");
+        opts.body(Some(&JsValue::from_str(&call_data.to_string())));
+        
+        let request = Request::new_with_str_and_init(SEPOLIA_RPC_URL, &opts)
+            .map_err(|e| format!("Failed to create request: {:?}", e))?;
+        
+        request.headers().set("Content-Type", "application/json")
+            .map_err(|e| format!("Failed to set headers: {:?}", e))?;
+        
+        let response_promise = window.fetch_with_request(&request);
+        let response_js = JsFuture::from(response_promise).await
+            .map_err(|e| format!("Fetch failed: {:?}", e))?;
+        
+        let response: Response = response_js.dyn_into()
+            .map_err(|_| "Failed to cast response")?;
+        
+        if !response.ok() {
+            return Err(format!("HTTP error: {}", response.status()));
+        }
+        
+        let json_promise = response.json()
+            .map_err(|e| format!("Failed to get JSON: {:?}", e))?;
+        let json_js = JsFuture::from(json_promise).await
+            .map_err(|e| format!("JSON parsing failed: {:?}", e))?;
+        
+        // Parse the JSON response
+        let response_obj: serde_json::Value = serde_wasm_bindgen::from_value(json_js)
+            .map_err(|e| format!("Failed to parse response: {}", e))?;
+        
+        if let Some(error) = response_obj.get("error") {
+            error!("❌ Contract call failed: {:?}", error);
+            return Err(format!("RPC error: {:?}", error));
+        }
+        
+        if let Some(result) = response_obj.get("result") {
+            info!("✅ Contract call successful!");
+            info!("   📄 Full RPC Response: {}", serde_json::to_string_pretty(&response_obj).unwrap_or_else(|_| "Failed to serialize".to_string()));
+            info!("   📊 Result Data: {:?}", result);
+            
+            // Extract UUID value from result array
+            let uuid_value = if let Some(values) = result.as_array() {
+                if !values.is_empty() {
+                    values[0].as_str().unwrap_or("Unknown").to_string()
+                } else {
+                    "No return value".to_string()
+                }
+            } else {
+                "Invalid result format".to_string()
+            };
+            
+            info!("   🎯 UUID Value: {}", uuid_value);
+            
+            // Get block information for WASM
+            Self::get_latest_block_info_wasm();
+            
+            Ok(uuid_value)
+        } else {
+            Err("No result in response".to_string())
+        }
+    }
+    
+    #[cfg(target_arch = "wasm32")]
+    fn get_latest_block_info_wasm() {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen_futures::JsFuture;
+        use web_sys::{window, RequestInit, Request, Response};
+        
+        wasm_bindgen_futures::spawn_local(async {
+            if let Ok(window) = window().ok_or("No window") {
+                let block_data = serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "method": "starknet_getBlockWithTxHashes",
+                    "params": ["latest"],
+                    "id": 2
+                });
+                
+                let mut opts = RequestInit::new();
+                opts.method("POST");
+                opts.body(Some(&JsValue::from_str(&block_data.to_string())));
+                
+                if let Ok(request) = Request::new_with_str_and_init(SEPOLIA_RPC_URL, &opts) {
+                    let _ = request.headers().set("Content-Type", "application/json");
+                    
+                    if let Ok(response_js) = JsFuture::from(window.fetch_with_request(&request)).await {
+                        if let Ok(response) = response_js.dyn_into::<Response>() {
+                            if let Ok(json_js) = JsFuture::from(response.json().unwrap()).await {
+                                if let Ok(block_obj) = serde_wasm_bindgen::from_value::<serde_json::Value>(json_js) {
+                                    if let Some(result) = block_obj.get("result") {
+                                        if let Some(block_number) = result.get("block_number") {
+                                            info!("   📦 Latest Block Number: {}", block_number);
+                                        }
+                                        if let Some(block_hash) = result.get("block_hash") {
+                                            info!("   🔒 Block Hash: {}", block_hash.as_str().unwrap_or("Unknown"));
+                                        }
+                                        if let Some(timestamp) = result.get("timestamp") {
+                                            info!("   ⏰ Block Timestamp: {}", timestamp);
+                                        }
+                                        if let Some(transactions) = result.get("transactions") {
+                                            if let Some(tx_array) = transactions.as_array() {
+                                                info!("   🔄 Transactions in Block: {}", tx_array.len());
+                                                if !tx_array.is_empty() {
+                                                    info!("   📝 Recent Transaction Hashes:");
+                                                    for (i, tx) in tx_array.iter().take(3).enumerate() {
+                                                        if let Some(tx_hash) = tx.as_str() {
+                                                            info!("      {}. {}", i + 1, tx_hash);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
     }
 }
 

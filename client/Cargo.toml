@@ -32,6 +32,8 @@ serde_json = "1.0"
 getrandom = { version = "0.3", features = ["wasm_js"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls"] }
 async-trait = "0.1"
+# Starknet dependencies - using direct HTTP calls for better compatibility
+hex = "0.4"
 
 # Idiomatic Bevy code often triggers these lints, and the CI workflow treats
 # In some cases they may still signal poor code quality however, so consider
@@ -70,8 +72,10 @@ tokio = { version = "1.46.1", features = ["rt-multi-thread"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "1.46.1", features = ["sync", "macros", "io-util", "rt", "time"] }
 wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
 js-sys = "0.3"
+serde-wasm-bindgen = "0.6"
 
 [target.wasm32-unknown-unknown]
 runner = "wasm-server-runner"
