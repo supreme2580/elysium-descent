@@ -17,6 +17,13 @@ pub struct EnemyAI {
     pub detection_range: f32,
     pub last_attack_time: f32,
     pub attack_cooldown: f32,
+    pub path_memory: Vec<Vec3>, // Store player positions for pathfinding
+    pub max_path_memory: usize, // Maximum number of positions to remember
+    pub current_target_index: usize, // Current target in path memory
+    pub stuck_time: f32, // Time enemy has been stuck
+    pub max_stuck_time: f32, // Maximum time to be stuck before recalculating
+    pub last_position: Vec3, // Last position for stuck detection
+    pub stuck_threshold: f32, // Distance threshold for stuck detection
 }
 
 impl Default for EnemyAI {
@@ -28,6 +35,13 @@ impl Default for EnemyAI {
             detection_range: 15.0, // Detect player from further away
             last_attack_time: 0.0,
             attack_cooldown: 2.0, // 2 seconds between attacks
+            path_memory: Vec::new(),
+            max_path_memory: 20, // Remember last 20 player positions
+            current_target_index: 0,
+            stuck_time: 0.0,
+            max_stuck_time: 3.0, // 3 seconds before recalculating path
+            last_position: Vec3::ZERO,
+            stuck_threshold: 0.5, // Consider stuck if moved less than 0.5 units
         }
     }
 }
@@ -77,10 +91,37 @@ impl Plugin for EnemyAIPlugin {
         app.add_systems(
             Update,
             (
+                record_player_path,
                 enemy_ai_movement,
                 enemy_ai_animations,
             ).chain(),
         );
+    }
+}
+
+/// System that records player positions for enemy pathfinding
+fn record_player_path(
+    _time: Res<Time>,
+    player_query: Query<&Transform, (With<crate::systems::character_controller::CharacterController>, Without<Enemy>)>,
+    mut enemy_query: Query<&mut EnemyAI, With<Enemy>>,
+) {
+    let Ok(player_transform) = player_query.single() else {
+        return;
+    };
+
+    let player_pos = player_transform.translation;
+    
+    for mut enemy_ai in &mut enemy_query {
+        // Only record if player is within detection range
+        if player_pos.distance(enemy_ai.last_position) <= enemy_ai.detection_range {
+            // Add current player position to path memory
+            enemy_ai.path_memory.push(player_pos);
+            
+            // Keep only the last max_path_memory positions
+            if enemy_ai.path_memory.len() > enemy_ai.max_path_memory {
+                enemy_ai.path_memory.remove(0);
+            }
+        }
     }
 }
 
@@ -90,9 +131,10 @@ fn enemy_ai_movement(
     mut enemy_query: Query<(&mut Transform, &mut LinearVelocity, &mut EnemyAI, &mut AnimationState), (With<Enemy>, Without<crate::systems::character_controller::CharacterController>)>,
     player_query: Query<&Transform, (With<crate::systems::character_controller::CharacterController>, Without<Enemy>)>,
     boundary_constraint: Option<Res<BoundaryConstraint>>,
+    spatial_query: SpatialQuery,
 ) {
     let delta_time = time.delta_secs();
-    let current_time = time.elapsed_secs();
+    let _current_time = time.elapsed_secs();
     
     // Find the player
     let Ok(player_transform) = player_query.single() else {
@@ -111,37 +153,113 @@ fn enemy_ai_movement(
         let enemy_pos = enemy_transform.translation;
         let distance_to_player = enemy_pos.distance(player_pos);
 
-        // Only act if player is within detection range
-        if distance_to_player <= enemy_ai.detection_range {
-            // Check if we should attack (close enough and cooldown expired)
-            let can_attack = distance_to_player <= enemy_ai.attack_range 
-                && (current_time - enemy_ai.last_attack_time) >= enemy_ai.attack_cooldown;
+        // Update stuck detection
+        let distance_moved = enemy_pos.distance(enemy_ai.last_position);
+        if distance_moved < enemy_ai.stuck_threshold {
+            enemy_ai.stuck_time += delta_time;
+        } else {
+            enemy_ai.stuck_time = 0.0;
+        }
+        enemy_ai.last_position = enemy_pos;
+
+        // Always act on player - no distance limitation
+        // Check if player is too close (within 5 units) - be idle
+        if distance_to_player <= 5.0 {
+            // Too close - be idle and face player
+            enemy_ai.is_moving = false;
             
-            if can_attack {
-                // Attack behavior - stop moving and prepare attack
-                enemy_ai.is_moving = false;
-                enemy_ai.last_attack_time = current_time;
+            // Stop movement
+            enemy_velocity.x = 0.0;
+            enemy_velocity.z = 0.0;
+            enemy_velocity.y = 0.0;
+            animation_state.forward_hold_time = 0.0;
+            
+            // Face the player
+            let direction_to_player = (player_pos - enemy_pos).normalize();
+            let direction_2d = Vec2::new(direction_to_player.x, direction_to_player.z).normalize();
+            let target_rotation = Quat::from_rotation_arc(Vec3::Z, Vec3::new(direction_2d.x, 0.0, direction_2d.y));
+            enemy_transform.rotation = enemy_transform.rotation.slerp(target_rotation, 5.0 * delta_time);
+            
+            // Match player elevation
+            let target_y = player_pos.y;
+            enemy_transform.translation.y = enemy_transform.translation.y.lerp(target_y, 2.0 * delta_time);
+        } else {
+            // Player is not too close - always follow regardless of distance
+            enemy_ai.is_moving = true;
                 
-                // Stop movement
-                enemy_velocity.x = 0.0;
-                enemy_velocity.z = 0.0;
-                enemy_velocity.y = 0.0;
-                animation_state.forward_hold_time = 0.0;
+                // Determine target position - use path memory if available and not stuck
+                let target_pos = if !enemy_ai.path_memory.is_empty() && enemy_ai.stuck_time < enemy_ai.max_stuck_time {
+                    // Use path memory for intelligent following
+                    let path_index = enemy_ai.current_target_index.min(enemy_ai.path_memory.len() - 1);
+                    enemy_ai.path_memory[path_index]
+                } else {
+                    // Direct line to player if stuck or no path memory
+                    player_pos
+                };
                 
-                // Face the player
-                let direction_to_player = (player_pos - enemy_pos).normalize();
-                let direction_2d = Vec2::new(direction_to_player.x, direction_to_player.z).normalize();
-                let target_rotation = Quat::from_rotation_arc(Vec3::Z, Vec3::new(direction_2d.x, 0.0, direction_2d.y));
-                enemy_transform.rotation = enemy_transform.rotation.slerp(target_rotation, 5.0 * delta_time);
-            } else if distance_to_player > enemy_ai.attack_range {
-                // Move towards player if not in attack range
-                enemy_ai.is_moving = true;
+                let direction_to_target = (target_pos - enemy_pos).normalize();
+                let target_velocity = direction_to_target * enemy_ai.move_speed;
                 
-                let direction_to_player = (player_pos - enemy_pos).normalize();
-                let target_velocity = direction_to_player * enemy_ai.move_speed;
+                // Check for wall collisions using spatial query
+                let ray_start = enemy_pos;
+                let ray_direction = Dir3::new(Vec3::new(target_velocity.x, 0.0, target_velocity.z).normalize()).unwrap_or(Dir3::Y);
+                let ray_distance = enemy_ai.move_speed * delta_time;
+                
+                let hit = spatial_query.cast_ray(
+                    ray_start,
+                    ray_direction,
+                    ray_distance,
+                    true,
+                    &SpatialQueryFilter::default(),
+                );
+                
+                let mut final_velocity = target_velocity;
+                
+                // If we hit a wall, try to find an alternative path
+                if let Some(_hit) = hit {
+                    // Try to move around the obstacle by checking perpendicular directions
+                    let perpendicular1 = Dir3::new(Vec3::new(-ray_direction.as_vec3().z, 0.0, ray_direction.as_vec3().x)).unwrap_or(Dir3::X);
+                    let perpendicular2 = Dir3::new(Vec3::new(ray_direction.as_vec3().z, 0.0, -ray_direction.as_vec3().x)).unwrap_or(Dir3::X);
+                    
+                    let hit1 = spatial_query.cast_ray(
+                        ray_start,
+                        perpendicular1,
+                        ray_distance,
+                        true,
+                        &SpatialQueryFilter::default(),
+                    );
+                    
+                    let hit2 = spatial_query.cast_ray(
+                        ray_start,
+                        perpendicular2,
+                        ray_distance,
+                        true,
+                        &SpatialQueryFilter::default(),
+                    );
+                    
+                    // Choose the direction with more space
+                    if hit1.is_none() && hit2.is_none() {
+                        // Both directions are free, choose the one closer to target
+                        let dir1_towards_target = perpendicular1.as_vec3().dot((target_pos - enemy_pos).normalize());
+                        let dir2_towards_target = perpendicular2.as_vec3().dot((target_pos - enemy_pos).normalize());
+                        
+                        if dir1_towards_target.abs() > dir2_towards_target.abs() {
+                            final_velocity = perpendicular1.as_vec3() * enemy_ai.move_speed;
+                        } else {
+                            final_velocity = perpendicular2.as_vec3() * enemy_ai.move_speed;
+                        }
+                    } else if hit1.is_none() {
+                        final_velocity = perpendicular1.as_vec3() * enemy_ai.move_speed;
+                    } else if hit2.is_none() {
+                        final_velocity = perpendicular2.as_vec3() * enemy_ai.move_speed;
+                    } else {
+                        // Both directions blocked, reduce speed and try to push through
+                        final_velocity = target_velocity * 0.3;
+                    }
+                }
                 
                 // Check boundary constraints before applying movement
-                let proposed_pos = enemy_pos + Vec3::new(target_velocity.x, 0.0, target_velocity.z) * delta_time;
+                let proposed_pos = enemy_pos + Vec3::new(final_velocity.x, 0.0, final_velocity.z) * delta_time;
                 
                 // Check if proposed position would be outside boundaries
                 let would_be_outside = proposed_pos.x < boundary_constraint.min_x 
@@ -152,7 +270,7 @@ fn enemy_ai_movement(
                 // If movement would take us outside boundaries, reduce or stop movement
                 if would_be_outside {
                     // Calculate how much we can move without going outside boundaries
-                    let mut clamped_velocity = target_velocity;
+                    let mut clamped_velocity = final_velocity;
                     
                     if proposed_pos.x < boundary_constraint.min_x || proposed_pos.x > boundary_constraint.max_x {
                         clamped_velocity.x = 0.0;
@@ -166,19 +284,22 @@ fn enemy_ai_movement(
                     enemy_velocity.z = enemy_velocity.z.lerp(clamped_velocity.z, 5.0 * delta_time);
                 } else {
                     // Normal movement within boundaries
-                    enemy_velocity.x = enemy_velocity.x.lerp(target_velocity.x, 5.0 * delta_time);
-                    enemy_velocity.z = enemy_velocity.z.lerp(target_velocity.z, 5.0 * delta_time);
+                    enemy_velocity.x = enemy_velocity.x.lerp(final_velocity.x, 5.0 * delta_time);
+                    enemy_velocity.z = enemy_velocity.z.lerp(final_velocity.z, 5.0 * delta_time);
                 }
                 
                 enemy_velocity.y = 0.0;
                 
-                // Rotate to face player
-                let direction_2d = Vec2::new(direction_to_player.x, direction_to_player.z).normalize();
-                let target_rotation = Quat::from_rotation_arc(Vec3::Z, Vec3::new(direction_2d.x, 0.0, direction_2d.y));
-                enemy_transform.rotation = enemy_transform.rotation.slerp(target_rotation, 3.0 * delta_time);
+                // Rotate to face movement direction
+                let movement_direction = Vec2::new(enemy_velocity.x, enemy_velocity.z).normalize();
+                if movement_direction.length() > 0.1 {
+                    let target_rotation = Quat::from_rotation_arc(Vec3::Z, Vec3::new(movement_direction.x, 0.0, movement_direction.y));
+                    enemy_transform.rotation = enemy_transform.rotation.slerp(target_rotation, 3.0 * delta_time);
+                }
                 
-                // Keep on ground
-                enemy_transform.translation.y = -1.65;
+                // Match player elevation smoothly
+                let target_y = player_pos.y;
+                enemy_transform.translation.y = enemy_transform.translation.y.lerp(target_y, 2.0 * delta_time);
                 
                 // Update animation state
                 let horizontal_speed = Vec2::new(enemy_velocity.x, enemy_velocity.z).length();
@@ -187,35 +308,12 @@ fn enemy_ai_movement(
                 } else {
                     animation_state.forward_hold_time = 0.0;
                 }
-            } else {
-                // In attack range but on cooldown - stay still and face player
-                enemy_ai.is_moving = false;
                 
-                // Stop moving
-                enemy_velocity.x = 0.0;
-                enemy_velocity.z = 0.0;
-                enemy_velocity.y = 0.0;
-                animation_state.forward_hold_time = 0.0;
-                
-                // Face the player
-                let direction_to_player = (player_pos - enemy_pos).normalize();
-                let direction_2d = Vec2::new(direction_to_player.x, direction_to_player.z).normalize();
-                let target_rotation = Quat::from_rotation_arc(Vec3::Z, Vec3::new(direction_2d.x, 0.0, direction_2d.y));
-                enemy_transform.rotation = enemy_transform.rotation.slerp(target_rotation, 5.0 * delta_time);
+                // Update path target if we're close to current target
+                if !enemy_ai.path_memory.is_empty() && enemy_pos.distance(target_pos) < 2.0 {
+                    enemy_ai.current_target_index = (enemy_ai.current_target_index + 1) % enemy_ai.path_memory.len();
+                }
             }
-        } else {
-            // Player out of detection range - idle behavior
-            enemy_ai.is_moving = false;
-            
-            // Stop moving
-            enemy_velocity.x = 0.0;
-            enemy_velocity.z = 0.0;
-            enemy_velocity.y = 0.0;
-            animation_state.forward_hold_time = 0.0;
-            
-            // Keep on ground
-            enemy_transform.translation.y = -1.65;
-        }
     }
 }
 
