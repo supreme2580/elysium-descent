@@ -99,6 +99,7 @@ impl StarknetClient {
                             // WASM sleep using timeout
                             use wasm_bindgen_futures::JsFuture;
                             use wasm_bindgen::closure::Closure;
+                            use wasm_bindgen::JsCast;
                             use web_sys::{window};
                             
                             if let Some(window) = window() {
@@ -187,8 +188,6 @@ impl StarknetClient {
         
         if let Some(result) = response_obj.get("result") {
             info!("✅ Contract call successful!");
-            info!("   📄 Full RPC Response: {}", serde_json::to_string_pretty(&response_obj).unwrap_or_else(|_| "Failed to serialize".to_string()));
-            info!("   📊 Result Data: {:?}", result);
             
             // Extract UUID value from result array
             let uuid_value = if let Some(values) = result.as_array() {
@@ -201,10 +200,7 @@ impl StarknetClient {
                 "Invalid result format".to_string()
             };
             
-            info!("   🎯 UUID Value: {}", uuid_value);
-            
-            // Now get transaction receipt for this block
-            Self::get_latest_block_info_blocking();
+            info!("   📝 Transaction Hash: {}", uuid_value);
             
             Ok(uuid_value)
         } else {
@@ -286,8 +282,8 @@ impl StarknetClient {
         });
         
         let mut opts = RequestInit::new();
-        opts.method("POST");
-        opts.body(Some(&JsValue::from_str(&call_data.to_string())));
+        opts.set_method("POST");
+        opts.set_body(&JsValue::from_str(&call_data.to_string()));
         
         let request = Request::new_with_str_and_init(SEPOLIA_RPC_URL, &opts)
             .map_err(|e| format!("Failed to create request: {:?}", e))?;
@@ -322,8 +318,6 @@ impl StarknetClient {
         
         if let Some(result) = response_obj.get("result") {
             info!("✅ Contract call successful!");
-            info!("   📄 Full RPC Response: {}", serde_json::to_string_pretty(&response_obj).unwrap_or_else(|_| "Failed to serialize".to_string()));
-            info!("   📊 Result Data: {:?}", result);
             
             // Extract UUID value from result array
             let uuid_value = if let Some(values) = result.as_array() {
@@ -336,10 +330,7 @@ impl StarknetClient {
                 "Invalid result format".to_string()
             };
             
-            info!("   🎯 UUID Value: {}", uuid_value);
-            
-            // Get block information for WASM
-            Self::get_latest_block_info_wasm();
+            info!("   📝 Transaction Hash: {}", uuid_value);
             
             Ok(uuid_value)
         } else {
@@ -363,8 +354,8 @@ impl StarknetClient {
                 });
                 
                 let mut opts = RequestInit::new();
-                opts.method("POST");
-                opts.body(Some(&JsValue::from_str(&block_data.to_string())));
+                opts.set_method("POST");
+                opts.set_body(&JsValue::from_str(&block_data.to_string()));
                 
                 if let Ok(request) = Request::new_with_str_and_init(SEPOLIA_RPC_URL, &opts) {
                     let _ = request.headers().set("Content-Type", "application/json");
@@ -446,20 +437,64 @@ fn read_wallet() -> Result<Wallet, String> {
 
 #[cfg(target_arch = "wasm32")]
 fn read_wallet() -> Result<Wallet, String> {
-    use wasm_bindgen::JsCast;
     use web_sys::window;
     
-    let window = window().ok_or("No window")?;
-    let storage = window.local_storage()
-        .map_err(|_| "Failed to get localStorage")?
-        .ok_or("No localStorage")?;
+    let window = window().ok_or("No window object available")?;
+    let local_storage = window
+        .local_storage()
+        .map_err(|_| "Failed to access localStorage")?
+        .ok_or("localStorage not available")?;
     
-    let wallet_json = storage.get_item("ed-wallet.json")
-        .map_err(|_| "Failed to get wallet from localStorage")?
-        .ok_or("No wallet in localStorage")?;
+    let wallet_json = local_storage
+        .get_item("ed-wallet")
+        .map_err(|_| "Failed to read from localStorage")?;
     
-    serde_json::from_str(&wallet_json)
-        .map_err(|e| format!("Failed to parse wallet: {}", e))
+    match wallet_json {
+        Some(json) => {
+            info!("Reading wallet from localStorage");
+            serde_json::from_str(&json)
+                .map_err(|e| format!("Failed to parse wallet from localStorage: {}", e))
+        }
+        None => {
+            info!("No wallet found in localStorage");
+            Err("Wallet not found in localStorage".to_string())
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn save_wallet(wallet: &Wallet) -> Result<(), String> {
+    use web_sys::window;
+    
+    let window = window().ok_or("No window object available")?;
+    let local_storage = window
+        .local_storage()
+        .map_err(|_| "Failed to access localStorage")?
+        .ok_or("localStorage not available")?;
+    
+    let wallet_json = serde_json::to_string(wallet)
+        .map_err(|e| format!("Failed to serialize wallet: {}", e))?;
+    
+    local_storage
+        .set_item("ed-wallet", &wallet_json)
+        .map_err(|_| "Failed to save wallet to localStorage")?;
+    
+    info!("Wallet saved to localStorage successfully");
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn save_wallet(wallet: &Wallet) -> Result<(), String> {
+    use std::fs;
+    
+    let wallet_json = serde_json::to_string(wallet)
+        .map_err(|e| format!("Failed to serialize wallet: {}", e))?;
+    
+    fs::write("ed-wallet.json", wallet_json)
+        .map_err(|e| format!("Failed to write wallet file: {}", e))?;
+    
+    info!("Wallet saved to ed-wallet.json successfully");
+    Ok(())
 }
 
 pub fn plugin(app: &mut App) {
