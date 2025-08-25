@@ -116,15 +116,31 @@ fn record_player_path(
             let enemy_pos = enemy_transform.translation;
             let distance_to_player = enemy_pos.distance(player_pos);
             
-            // Record position if player is out of range
-            if distance_to_player > enemy_ai.detection_range {
+            // Clear recorded positions if significant height difference
+            let height_diff = (player_pos.y - enemy_pos.y).abs();
+            if height_diff > 3.0 {
+                enemy_ai.player_positions.clear();
+            }
+
+            // Record position if player is out of range and on similar height
+            if distance_to_player > enemy_ai.detection_range && height_diff < 3.0 {
                 // Check if this position is significantly different from the last recorded position
                 let is_new_position = enemy_ai.player_positions.last()
-                    .map_or(true, |last_pos| player_pos.distance(*last_pos) > 0.5);
+                    .map_or(true, |last_pos| {
+                        // Check both horizontal distance and height difference
+                        let horizontal_dist = Vec2::new(player_pos.x - last_pos.x, player_pos.z - last_pos.z).length();
+                        let height_diff = (player_pos.y - last_pos.y).abs();
+                        horizontal_dist > 0.5 || height_diff > 0.5
+                    });
                 
                 if is_new_position {
                     // Add current player position
                     enemy_ai.player_positions.push(player_pos);
+
+                    // Remove any positions that are too far in height from current enemy position
+                    enemy_ai.player_positions.retain(|pos| {
+                        (pos.y - enemy_pos.y).abs() < 3.0
+                    });
                 }
             }
             
@@ -208,17 +224,26 @@ fn enemy_ai_movement(
             // Player is not too close - always follow regardless of distance
             enemy_ai.is_moving = true;
                 
-                // Always target the player directly when in range
-                let target_pos = if distance_to_player <= enemy_ai.detection_range {
+                // Always target the player directly when in range or at different height
+                let height_diff = (player_pos.y - enemy_pos.y).abs();
+                let target_pos = if distance_to_player <= enemy_ai.detection_range || height_diff > 3.0 {
                     player_pos
                 } else {
-                    // Use recorded positions when player is out of range
+                    // Use recorded positions when player is out of range and at similar height
                     if !enemy_ai.player_positions.is_empty() {
                         let current_index = enemy_ai.current_target_index.min(enemy_ai.player_positions.len() - 1);
-                        enemy_ai.player_positions[current_index]
+                        let target = enemy_ai.player_positions[current_index];
+                        
+                        // If target position is at a different height, clear positions and target player
+                        if (target.y - enemy_pos.y).abs() > 3.0 {
+                            enemy_ai.player_positions.clear();
+                            player_pos
+                        } else {
+                            target
+                        }
                     } else {
-                        // No positions to follow, stay at current position
-                        enemy_pos
+                        // No positions to follow, target player directly
+                        player_pos
                     }
                 };
 
