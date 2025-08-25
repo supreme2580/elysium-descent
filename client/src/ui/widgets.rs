@@ -157,13 +157,13 @@ pub enum HudPosition {
 pub fn player_hud_widget(
     avatar: Handle<Image>,
     name: &str,
-    level: u32,
-    health: (u32, u32),
+    level: &str,
+    time_left: (u32, u32),
     xp: (u32, u32),
     font: Handle<Font>,
     position: HudPosition,
 ) -> impl Bundle {
-    let health_percent = health.0 as f32 / health.1 as f32;
+    let time_percent = time_left.0 as f32 / time_left.1 as f32;
     let xp_percent = xp.0 as f32 / xp.1 as f32;
     let (left, right, flex_direction) = match position {
         HudPosition::Left => (Val::Px(32.0), Val::Auto, FlexDirection::Row),
@@ -235,7 +235,7 @@ pub fn player_hud_widget(
                         BorderColor(Color::ELYSIUM_GOLD_DIM),
                         BorderRadius::MAX,
                         children![(
-                            Text::new(level.to_string()),
+                            Text::new(level),
                             TextFont {
                                 font: font.clone(),
                                 font_size: 24.0,
@@ -271,7 +271,7 @@ pub fn player_hud_widget(
                             ..default()
                         },
                     ),
-                    // Health Bar Container
+                    // Time Left Bar Container
                     (
                         Node {
                             width: Val::Px(420.0),
@@ -281,7 +281,7 @@ pub fn player_hud_widget(
                             ..default()
                         },
                         children![
-                            // Health Label Row
+                            // Time Left Label Row
                             (
                                 Node {
                                     width: Val::Percent(100.0),
@@ -293,16 +293,16 @@ pub fn player_hud_widget(
                                 },
                                 children![
                                     (
-                                        Text::new("HEALTH"),
+                                        Text::new("TIME LEFT"),
                                         TextFont {
                                             font: font.clone(),
                                             font_size: 16.5,
                                             ..default()
                                         },
-                                        TextColor(Color::HEALTH_GREEN),
+                                        TextColor(Color::ENERGY_BLUE),
                                     ),
                                     (
-                                        Text::new(format!("{}/{}", health.0, health.1)),
+                                        Text::new(format!("{}:{:02}", time_left.0 / 60, time_left.0 % 60)),
                                         TextFont {
                                             font: font.clone(),
                                             font_size: 16.5,
@@ -312,7 +312,7 @@ pub fn player_hud_widget(
                                     )
                                 ]
                             ),
-                            // Health Bar
+                            // Time Left Bar
                             (
                                 Node {
                                     width: Val::Px(420.0),
@@ -321,17 +321,17 @@ pub fn player_hud_widget(
                                     ..default()
                                 },
                                 BackgroundColor(Color::DARKER_GLASS),
-                                BorderColor(Color::HEALTH_GREEN_DARK.with_alpha(0.6)),
+                                BorderColor(Color::ENERGY_BLUE_DARK.with_alpha(0.6)),
                                 BorderRadius::all(Val::Px(10.5)),
                                 children![
                                     (
                                         Node {
-                                            width: Val::Px(417.0 * health_percent),
+                                            width: Val::Px(417.0 * time_percent),
                                             height: Val::Px(18.0),
                                             margin: UiRect::all(Val::Px(1.5)),
                                             ..default()
                                         },
-                                        BackgroundColor(Color::HEALTH_GREEN),
+                                        BackgroundColor(Color::ENERGY_BLUE),
                                         BorderRadius::all(Val::Px(9.0)),
                                     )
                                 ]
@@ -360,7 +360,7 @@ pub fn player_hud_widget(
                                 },
                                 children![
                                     (
-                                        Text::new("EXPERIENCE"),
+                                        Text::new("XP"),
                                         TextFont {
                                             font: font.clone(),
                                             font_size: 13.5,

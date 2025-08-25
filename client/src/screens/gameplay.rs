@@ -18,35 +18,44 @@ use crate::systems::enemy_ai::EnemyAIPlugin;
 use crate::ui::dialog::DialogPlugin;
 use crate::ui::inventory::spawn_inventory_ui;
 use crate::ui::styles::ElysiumDescentColorPalette;
-use crate::ui::widgets::{HudPosition, player_hud_widget};
+use crate::ui::widgets::HudPosition;
+use crate::ui::dynamic_hud::spawn_dynamic_player_hud;
+use crate::game::resources::{GameTimer, PlayerProgression};
+use crate::systems::timer::{update_game_timer, update_hud_display, update_progress_bars};
 use crate::ui::modal::despawn_modal;
 use bevy_enhanced_input::prelude::*;
 
 // ===== PLUGIN SETUP =====
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(
-        OnEnter(Screen::GamePlay),
-        (
-            reveal_preloaded_environment,
-            debug_streaming_manager_state,
-            PlayingScene::spawn_player_and_camera,
-            set_gameplay_clear_color,
-        ),
-    )
-    .add_systems(
-        Update,
-        (
-            camera_follow_player,
-            // Fallback systems that run if preloaded entities weren't found
-            fallback_spawn_environment,
-            fallback_spawn_collectibles,
-        ).run_if(in_state(Screen::GamePlay)),
-    )
-    .add_systems(
-        OnExit(Screen::GamePlay),
-        (despawn_scene::<PlayingScene>, despawn_gameplay_hud, cleanup_preloaded_environment, despawn_modal, despawn_collectibles),
-    )
+    app.init_resource::<GameTimer>()
+        .init_resource::<PlayerProgression>()
+        .add_systems(
+            OnEnter(Screen::GamePlay),
+            (
+                reveal_preloaded_environment,
+                debug_streaming_manager_state,
+                PlayingScene::spawn_player_and_camera,
+                set_gameplay_clear_color,
+                spawn_dynamic_hud,
+            ),
+        )
+        .add_systems(
+            Update,
+            (
+                camera_follow_player,
+                update_game_timer,
+                update_hud_display,
+                update_progress_bars,
+                // Fallback systems that run if preloaded entities weren't found
+                fallback_spawn_environment,
+                fallback_spawn_collectibles,
+            ).run_if(in_state(Screen::GamePlay)),
+        )
+        .add_systems(
+            OnExit(Screen::GamePlay),
+            (despawn_scene::<PlayingScene>, despawn_gameplay_hud, cleanup_preloaded_environment, despawn_modal, despawn_collectibles),
+        )
     .add_plugins(PhysicsPlugins::default())
     .add_plugins(CharacterControllerPlugin)
     .add_plugins(GltfAnimationPlugin)
@@ -119,23 +128,21 @@ struct EnvironmentMarker;
 #[derive(Component)]
 struct GameplayHud;
 
-fn spawn_player_hud(
-    commands: &mut Commands,
-    font_assets: &Res<FontAssets>,
-    ui_assets: &Res<UiAssets>,
+fn spawn_dynamic_hud(
+    mut commands: Commands,
+    font_assets: Res<FontAssets>,
+    ui_assets: Res<UiAssets>,
+    timer: Res<GameTimer>,
+    progression: Res<PlayerProgression>,
 ) {
-    // Example values, replace with actual player data
-    let avatar = ui_assets.player_avatar.clone();
-    let name = "0XJEHU";
-    let level = 2;
-    let health = (105, 115);
-    let xp = (80, 100);
-    let font = font_assets.rajdhani_bold.clone();
-
-    commands.spawn((
-        player_hud_widget(avatar, name, level, health, xp, font, HudPosition::Left),
-        GameplayHud,
-    ));
+    spawn_dynamic_player_hud(
+        &mut commands,
+        &font_assets,
+        &ui_assets,
+        &timer,
+        &progression,
+        HudPosition::Left,
+    );
 }
 
 fn spawn_objectives_ui(
@@ -202,7 +209,7 @@ fn spawn_objectives_ui(
     ));
 }
 
-fn despawn_gameplay_hud(mut commands: Commands, query: Query<Entity, With<GameplayHud>>) {
+fn despawn_gameplay_hud(mut commands: Commands, query: Query<Entity, With<crate::ui::dynamic_hud::DynamicPlayerHud>>) {
     for entity in &query {
         commands.entity(entity).despawn();
     }
@@ -354,7 +361,7 @@ impl PlayingScene {
         ));
 
         spawn_inventory_ui::<PlayingScene>(&mut commands);
-        spawn_player_hud(&mut commands, &font_assets, &ui_assets);
+        // HUD is now spawned via spawn_dynamic_hud system in OnEnter
         spawn_objectives_ui(&mut commands, &font_assets, &ui_assets);
         crate::ui::modal::spawn_objectives_modal(&mut commands, &font_assets, &ui_assets);
         

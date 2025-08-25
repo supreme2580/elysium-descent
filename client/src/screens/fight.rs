@@ -186,8 +186,8 @@ fn spawn_fight_scene(
             parent.spawn(crate::ui::widgets::player_hud_widget(
                 ui_assets.player_avatar.clone(),
                 "Player",
-                2,         // example level
-                (80, 100), // example health
+                "1/50",         // level as string
+                (300, 300), // time left (5:00 minutes countdown)
                 (50, 100), // example xp
                 font_assets.rajdhani_bold.clone(),
                 crate::ui::widgets::HudPosition::Left,
@@ -195,8 +195,8 @@ fn spawn_fight_scene(
             parent.spawn(crate::ui::widgets::player_hud_widget(
                 ui_assets.enemy_avatar.clone(),
                 "Enemy",
-                3,          // example level
-                (120, 150), // example health
+                "3/50",          // level as string
+                (300, 300), // time left (5:00 minutes countdown)
                 (90, 100),  // example xp
                 font_assets.rajdhani_medium.clone(),
                 crate::ui::widgets::HudPosition::Right,
