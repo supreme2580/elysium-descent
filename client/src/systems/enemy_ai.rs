@@ -3,7 +3,6 @@ use bevy_gltf_animation::prelude::*;
 use avian3d::{math::*, prelude::*};
 use crate::systems::character_controller::AnimationState;
 use crate::systems::boundary::BoundaryConstraint;
-use crate::resources::navigation::NavigationData;
 
 /// Marker component for enemy entities
 #[derive(Component)]
@@ -15,28 +14,32 @@ pub struct EnemyAI {
     pub move_speed: f32,
     pub is_moving: bool,
     pub detection_range: f32,
-    pub path_memory: Vec<Vec3>, // Store player positions for pathfinding
-    pub max_path_memory: usize, // Maximum number of positions to remember
-    pub current_target_index: usize, // Current target in path memory
+    pub player_positions: Vec<Vec3>, // Store unvisited player positions
+    pub last_record_time: f32, // Time of last position recording
+    pub record_interval: f32, // Interval between position recordings (in seconds)
+    pub current_target_index: usize, // Current target position index
     pub stuck_time: f32, // Time enemy has been stuck
     pub max_stuck_time: f32, // Maximum time to be stuck before recalculating
     pub last_position: Vec3, // Last position for stuck detection
     pub stuck_threshold: f32, // Distance threshold for stuck detection
+    pub position_reached_threshold: f32, // Distance threshold to consider a position reached
 }
 
 impl Default for EnemyAI {
     fn default() -> Self {
         Self {
-            move_speed: 3.0, // Increased speed for better pursuit
+            move_speed: 5.0, // Increased speed for better following
             is_moving: false,
-            detection_range: 25.0, // Increased detection range
-            path_memory: Vec::new(),
-            max_path_memory: 30, // Increased path memory for smoother paths
+            detection_range: 30.0, // Increased range to track player better
+            player_positions: Vec::new(),
+            last_record_time: 0.0,
+            record_interval: 0.5, // Record position more frequently
             current_target_index: 0,
             stuck_time: 0.0,
-            max_stuck_time: 1.5, // Reduced time before recalculating path
+            max_stuck_time: 1.5,
             last_position: Vec3::ZERO,
-            stuck_threshold: 0.3, // Reduced threshold for more responsive stuck detection
+            stuck_threshold: 0.3,
+            position_reached_threshold: 1.0, // Smaller threshold to be more precise
         }
     }
 }
@@ -83,42 +86,49 @@ pub struct EnemyAIPlugin;
 
 impl Plugin for EnemyAIPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .init_resource::<NavigationData>()
-            .add_systems(Startup, crate::systems::nav_loader::load_navigation_data)
-            .add_systems(
-                Update,
-                (
-                    record_player_path,
-                    enemy_ai_movement,
-                    enemy_ai_animations,
-                ).chain(),
-            );
+        app.add_systems(
+            Update,
+            (
+                record_player_path,
+                enemy_ai_movement,
+                enemy_ai_animations,
+            ).chain(),
+        );
     }
 }
 
 /// System that records player positions for enemy pathfinding
 fn record_player_path(
-    _time: Res<Time>,
+    time: Res<Time>,
     player_query: Query<&Transform, (With<crate::systems::character_controller::CharacterController>, Without<Enemy>)>,
-    mut enemy_query: Query<&mut EnemyAI, With<Enemy>>,
+    mut enemy_query: Query<(&Transform, &mut EnemyAI), With<Enemy>>,
 ) {
     let Ok(player_transform) = player_query.single() else {
         return;
     };
 
     let player_pos = player_transform.translation;
+    let current_time = time.elapsed_secs();
     
-    for mut enemy_ai in &mut enemy_query {
-        // Only record if player is within detection range
-        if player_pos.distance(enemy_ai.last_position) <= enemy_ai.detection_range {
-            // Add current player position to path memory
-            enemy_ai.path_memory.push(player_pos);
+    for (enemy_transform, mut enemy_ai) in &mut enemy_query {
+        // Only record if enough time has passed since last recording
+        if current_time - enemy_ai.last_record_time >= enemy_ai.record_interval {
+            let enemy_pos = enemy_transform.translation;
+            let distance_to_player = enemy_pos.distance(player_pos);
             
-            // Keep only the last max_path_memory positions
-            if enemy_ai.path_memory.len() > enemy_ai.max_path_memory {
-                enemy_ai.path_memory.remove(0);
+            // Record position if player is out of range
+            if distance_to_player > enemy_ai.detection_range {
+                // Check if this position is significantly different from the last recorded position
+                let is_new_position = enemy_ai.player_positions.last()
+                    .map_or(true, |last_pos| player_pos.distance(*last_pos) > 0.5);
+                
+                if is_new_position {
+                    // Add current player position
+                    enemy_ai.player_positions.push(player_pos);
+                }
             }
+            
+            enemy_ai.last_record_time = current_time;
         }
     }
 }
@@ -130,13 +140,12 @@ fn enemy_ai_movement(
     player_query: Query<(Entity, &Transform), (With<crate::systems::character_controller::CharacterController>, Without<Enemy>)>,
     boundary_constraint: Option<Res<BoundaryConstraint>>,
     spatial_query: SpatialQuery,
-    nav_data: Res<NavigationData>,
 ) {
     let delta_time = time.delta_secs();
     let _current_time = time.elapsed_secs();
     
     // Find the player
-    let Ok((player_id, player_transform)) = player_query.single() else {
+    let Ok((_, player_transform)) = player_query.single() else {
         return;
     };
 
@@ -186,109 +195,32 @@ fn enemy_ai_movement(
             // Player is not too close - always follow regardless of distance
             enemy_ai.is_moving = true;
                 
-                // Check if player has moved significantly
-                let player_moved = if let Some(last_pos) = enemy_ai.path_memory.last() {
-                    player_pos.distance(*last_pos) > 1.0 // Only consider significant movement
-                } else {
-                    true // If no previous position, consider it as moved
-                };
-
-                // Check if we need to recalculate path - only check every 3 seconds
-                let should_recalculate = time.elapsed_secs() % 3.0 < delta_time && (
-                    enemy_ai.path_memory.is_empty() 
-                    || enemy_ai.stuck_time >= enemy_ai.max_stuck_time
-                    || (enemy_ai.current_target_index >= enemy_ai.path_memory.len() - 1 && player_moved) // Only recalculate at end of path if player moved
-                    || (player_pos.distance(enemy_pos) > enemy_ai.detection_range * 1.5 && player_moved) // Only recalculate if player is far AND moved
-                );
-
-                if should_recalculate {
-                    // Get new path from current position to player
-                    let path = nav_data.find_path_to_target(enemy_pos, player_pos, enemy_ai.max_path_memory);
-                    
-                    info!("AI Movement - Enemy[{:?}] recalculating path:", enemy_id);
-                    info!("  Player[{:?}] pos: ({:.1}, {:.1}, {:.1})", player_id, player_pos.x, player_pos.y, player_pos.z);
-                    info!("  Enemy pos: ({:.1}, {:.1}, {:.1})", enemy_pos.x, enemy_pos.y, enemy_pos.z);
-                    info!("  Distance to player: {:.1}", distance_to_player);
-                    info!("  Path points: {}", path.len());
-                    for (i, point) in path.iter().enumerate() {
-                        info!("    Point {}: ({:.1}, {:.1}, {:.1})", i, point.x, point.y, point.z);
-                    }
-                    
-                    enemy_ai.path_memory = path;
-                    enemy_ai.current_target_index = 0;
-                    enemy_ai.stuck_time = 0.0;
-                }
-                
-                // Get current target position from path
-                let target_pos = if !enemy_ai.path_memory.is_empty() {
-                    let path_index = enemy_ai.current_target_index.min(enemy_ai.path_memory.len() - 1);
-                    let current_target = enemy_ai.path_memory[path_index];
-                    
-                    // Check if we're at the last point in the path
-                    let is_last_point = path_index == enemy_ai.path_memory.len() - 1;
-                    let distance_to_player = enemy_pos.distance(player_pos);
-                    
-                    // If at last point, check player distance
-                    if is_last_point {
-                        if distance_to_player < enemy_ai.detection_range {
-                            // Close enough to target player directly
-                            player_pos
-                        } else {
-                            // Too far, stay at current point until player moves
-                            current_target
-                        }
-                    } else {
-                                                // Move to next point if close enough to current target
-                    let dist_to_target = enemy_pos.distance(current_target);
-                    let dist_to_next = if path_index + 1 < enemy_ai.path_memory.len() {
-                        enemy_pos.distance(enemy_ai.path_memory[path_index + 1])
-                    } else {
-                        f32::MAX
-                    };
-                    
-                    // Transition to next point if:
-                    // 1. Close enough to current target OR
-                    // 2. Closer to next target than current target OR
-                    // 3. Been at current target too long OR
-                    // 4. Moving away from target
-                    let moving_away = {
-                        let current_dist = enemy_pos.distance(current_target);
-                        let prev_dist = enemy_ai.last_position.distance(current_target);
-                        current_dist > prev_dist
-                    };
-                    
-                    if dist_to_target < 1.0 || // Distance threshold
-                       (dist_to_next < dist_to_target && dist_to_next < enemy_ai.detection_range) ||
-                       enemy_ai.stuck_time > 0.5 || // Stuck time threshold
-                       moving_away { // Moving away from target
-                        let next_index = (path_index + 1).min(enemy_ai.path_memory.len() - 1);
-                        
-                        info!("AI Movement - Enemy[{:?}] reached waypoint:", enemy_id);
-                        info!("  Current pos: ({:.1}, {:.1}, {:.1})", enemy_pos.x, enemy_pos.y, enemy_pos.z);
-                        info!("  Moving to next point: {} -> {}", path_index, next_index);
-                        info!("  Distance to current: {:.1}, Distance to next: {:.1}", dist_to_target, dist_to_next);
-                        info!("  Stuck time: {:.1}", enemy_ai.stuck_time);
-                        info!("  Moving away: {}", moving_away);
-                        enemy_ai.current_target_index = next_index;
-                        enemy_ai.stuck_time = 0.0; // Reset stuck timer when reaching waypoint
-                    }
-                    
-                    // Log movement progress
-                    if time.elapsed_secs() % 1.0 < delta_time { // Log every second
-                        info!("AI Movement - Enemy[{:?}] status:", enemy_id);
-                        info!("  Current pos: ({:.1}, {:.1}, {:.1})", enemy_pos.x, enemy_pos.y, enemy_pos.z);
-                        info!("  Target pos: ({:.1}, {:.1}, {:.1})", current_target.x, current_target.y, current_target.z);
-                        info!("  Distance to target: {:.1}", dist_to_target);
-                        info!("  Current waypoint: {}/{}", path_index + 1, enemy_ai.path_memory.len());
-                        info!("  Stuck time: {:.1}", enemy_ai.stuck_time);
-                    }
-                    
-                    current_target
-                    }
-                } else {
-                    // This should never happen with improved pathfinding
+                // Always target the player directly when in range
+                let target_pos = if distance_to_player <= enemy_ai.detection_range {
                     player_pos
+                } else {
+                    // Use recorded positions when player is out of range
+                    if !enemy_ai.player_positions.is_empty() {
+                        let current_index = enemy_ai.current_target_index.min(enemy_ai.player_positions.len() - 1);
+                        enemy_ai.player_positions[current_index]
+                    } else {
+                        // No positions to follow, stay at current position
+                        enemy_pos
+                    }
                 };
+
+                // Remove any positions we've reached
+                if !enemy_ai.player_positions.is_empty() {
+                    let current_index = enemy_ai.current_target_index.min(enemy_ai.player_positions.len() - 1);
+                    let current_target = enemy_ai.player_positions[current_index];
+                    
+                    if enemy_pos.distance(current_target) <= enemy_ai.position_reached_threshold {
+                        if current_index < enemy_ai.player_positions.len() {
+                            enemy_ai.player_positions.remove(current_index);
+                        }
+                        enemy_ai.current_target_index = 0;
+                    }
+                }
                 
                 // Calculate direction and velocity
                 let direction = target_pos - enemy_pos;
@@ -452,8 +384,8 @@ fn enemy_ai_movement(
                 }
                 
                 // Update path target if we're close to current target
-                if !enemy_ai.path_memory.is_empty() && enemy_pos.distance(target_pos) < 2.0 {
-                    enemy_ai.current_target_index = (enemy_ai.current_target_index + 1) % enemy_ai.path_memory.len();
+                if !enemy_ai.player_positions.is_empty() && enemy_pos.distance(target_pos) < 2.0 {
+                    enemy_ai.current_target_index = (enemy_ai.current_target_index + 1) % enemy_ai.player_positions.len();
                 }
             }
     }
