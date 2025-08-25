@@ -126,7 +126,7 @@ fn follow_player_path(
     let Ok(player_transform) = player_query.single() else {
         return;
     };
-    let player_pos = player_transform.translation;
+        let player_pos = player_transform.translation;
     
     for (mut transform, mut path_follower, mut animation_state) in &mut enemy_query {
         let current_pos = transform.translation;
@@ -153,8 +153,8 @@ fn follow_player_path(
         // Get the next position to move towards (first in queue)
         let target_pos = path_follower.player_path[0];
         let direction = target_pos - current_pos;
-        let distance = direction.length();
-        
+                let distance = direction.length();
+                
         // If we're close enough to the target, remove it from queue and continue
         if distance < 1.2 {
             path_follower.player_path.remove(0); // Memory efficient - remove consumed position
@@ -168,7 +168,7 @@ fn follow_player_path(
         // Apply movement
         transform.translation += movement;
         path_follower.is_moving = true;
-        animation_state.forward_hold_time += delta_time;
+                    animation_state.forward_hold_time += delta_time;
         
         // Face movement direction
         let look_direction = Vec2::new(movement.x, movement.z);
@@ -176,7 +176,7 @@ fn follow_player_path(
             let look_direction = look_direction.normalize();
             let target_rotation = Quat::from_rotation_arc(Vec3::Z, Vec3::new(look_direction.x, 0.0, look_direction.y));
             transform.rotation = transform.rotation.slerp(target_rotation, 8.0 * delta_time);
-        }
+            }
     }
 }
 

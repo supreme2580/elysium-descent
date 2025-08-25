@@ -277,7 +277,8 @@ fn spawn_streaming_coin(
             ..default()
         },
         coin_collider,
-        RigidBody::Kinematic,
+        Sensor, // This makes the coin non-solid but still detects collisions
+        CollisionEventsEnabled, // Enable collision events for this coin
         Visibility::Visible,
         Collectible,
         CollectibleType::Coin,
@@ -291,8 +292,6 @@ fn spawn_streaming_coin(
             clockwise: true,
             speed: 1.0,
         },
-        Sensor, // This makes the coin non-solid but still detects collisions
-        CollisionEventsEnabled, // Enable collision events for this coin
         StreamingCoin { position_id },
     )).id()
 }

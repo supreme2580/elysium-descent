@@ -557,7 +557,8 @@ fn spawn_fallback_collectible(
             ..default()
         },
         coin_collider,
-        RigidBody::Kinematic,
+        Sensor, // This makes the coin non-solid but still detects collisions
+        CollisionEventsEnabled, // Enable collision events for this coin
         Visibility::Visible,
         Collectible,
         CollectibleType::Coin,
@@ -571,8 +572,6 @@ fn spawn_fallback_collectible(
             clockwise: true,
             speed: 1.0,
         },
-        Sensor,
-        CollisionEventsEnabled, // Enable collision events for this coin
         PlayingScene,
     ));
 }
