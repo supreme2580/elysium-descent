@@ -323,13 +323,13 @@ impl PlayingScene {
             ))
             .observe(setup_idle_animation);
 
-        // Add enemy with AI
+        // Add enemy behind player
         commands.spawn((
             Name::new("Gameplay Enemy"),
             GltfSceneRoot::new(assets.enemy.clone()),
             Transform {
-                translation: Vec3::new(10.0, -1.65, 5.0), // Position enemy away from player
-                rotation: Quat::from_rotation_y(std::f32::consts::PI),
+                translation: Vec3::new(0.0, 2.0, -8.0), // Spawn behind player
+                rotation: Quat::from_rotation_y(0.0), // Face forward like player
                 scale: Vec3::splat(4.0),
                 ..default()
             },
@@ -337,7 +337,7 @@ impl PlayingScene {
             Friction::new(0.5),
             Restitution::new(0.0),
             GravityScale(1.0),
-            CollisionEventsEnabled, // Enable collision events
+            CollisionEventsEnabled,
             PlayingScene,
         )).observe(setup_idle_animation);
 

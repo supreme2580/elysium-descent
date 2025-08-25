@@ -1,43 +1,30 @@
 use bevy::prelude::*;
 use bevy_gltf_animation::prelude::*;
-use avian3d::{math::*, prelude::*};
+use avian3d::prelude::*;
 use crate::systems::character_controller::AnimationState;
-use crate::systems::boundary::BoundaryConstraint;
 
 /// Marker component for enemy entities
 #[derive(Component)]
 pub struct Enemy;
 
-/// Component to track enemy AI state
+/// Simple path follower that traces player's exact steps
 #[derive(Component)]
-pub struct EnemyAI {
+pub struct PathFollower {
     pub move_speed: f32,
     pub is_moving: bool,
-    pub detection_range: f32,
-    pub player_positions: Vec<Vec3>, // Store unvisited player positions
-    pub last_record_time: f32, // Time of last position recording
-    pub record_interval: f32, // Interval between position recordings (in seconds)
-    pub current_target_index: usize, // Current target position index
-    pub stuck_time: f32, // Time enemy has been stuck
-    pub last_position: Vec3, // Last position for stuck detection
-    pub stuck_threshold: f32, // Distance threshold for stuck detection
-    pub position_reached_threshold: f32, // Distance threshold to consider a position reached
+    pub player_path: Vec<Vec3>, // Queue of player positions to follow
+    pub last_record_time: f32,
+    pub record_interval: f32, // How often to record player position
 }
 
-impl Default for EnemyAI {
+impl Default for PathFollower {
     fn default() -> Self {
         Self {
-            move_speed: 4.5, // Slightly slower than player's base speed
+            move_speed: 4.0, // Slightly slower than player
             is_moving: false,
-            detection_range: 30.0, // Increased range to track player better
-            player_positions: Vec::new(),
+            player_path: Vec::new(),
             last_record_time: 0.0,
-            record_interval: 0.5, // Record position more frequently
-            current_target_index: 0,
-            stuck_time: 0.0,
-            last_position: Vec3::ZERO,
-            stuck_threshold: 0.3,
-            position_reached_threshold: 1.0, // Smaller threshold to be more precise
+            record_interval: 0.2, // Record every 0.2 seconds
         }
     }
 }
@@ -46,35 +33,27 @@ impl Default for EnemyAI {
 #[derive(Bundle)]
 pub struct EnemyBundle {
     pub enemy: Enemy,
-    pub ai: EnemyAI,
+    pub path_follower: PathFollower,
     pub animation_state: AnimationState,
     pub body: RigidBody,
     pub collider: Collider,
     pub locked_axes: LockedAxes,
-    pub ground_caster: ShapeCaster,
 }
 
 impl Default for EnemyBundle {
     fn default() -> Self {
         Self {
             enemy: Enemy,
-            ai: EnemyAI::default(),
+            path_follower: PathFollower::default(),
             animation_state: AnimationState {
                 forward_hold_time: 0.0,
-                current_animation: 0, // Start uninitialized to prevent twitching
+                current_animation: 1, // Start with idle animation
                 fight_move_1: false,
                 fight_move_2: false,
             },
-            body: RigidBody::Kinematic, // Use kinematic instead of dynamic
+            body: RigidBody::Kinematic,
             collider: Collider::capsule(0.5, 1.5),
             locked_axes: LockedAxes::ROTATION_LOCKED,
-            ground_caster: ShapeCaster::new(
-                Collider::sphere(0.2),
-                Vector::ZERO,
-                Quaternion::default(),
-                Dir3::NEG_Y,
-            )
-            .with_max_distance(2.0), // Ground detection
         }
     }
 }
@@ -88,205 +67,133 @@ impl Plugin for EnemyAIPlugin {
             Update,
             (
                 record_player_path,
-                enemy_ai_movement,
-                enemy_ai_animations,
+                follow_player_path,
+                enemy_animations,
             ).chain(),
         );
     }
 }
 
-/// System that records player positions for enemy pathfinding
+/// Records player positions for enemies to follow
 fn record_player_path(
     time: Res<Time>,
     player_query: Query<&Transform, (With<crate::systems::character_controller::CharacterController>, Without<Enemy>)>,
-    mut enemy_query: Query<(&Transform, &mut EnemyAI), With<Enemy>>,
+    mut enemy_query: Query<&mut PathFollower, With<Enemy>>,
 ) {
     let Ok(player_transform) = player_query.single() else {
         return;
     };
 
-    let player_pos = player_transform.translation;
     let current_time = time.elapsed_secs();
     
-    for (enemy_transform, mut enemy_ai) in &mut enemy_query {
-        // Only record if enough time has passed since last recording
-        if current_time - enemy_ai.last_record_time >= enemy_ai.record_interval {
-            let enemy_pos = enemy_transform.translation;
-            let distance_to_player = enemy_pos.distance(player_pos);
+    for mut path_follower in &mut enemy_query {
+        // Record player position at intervals
+        if current_time - path_follower.last_record_time >= path_follower.record_interval {
+            let player_pos = player_transform.translation;
             
-            // Clear recorded positions when close enough to directly chase
-            if distance_to_player <= enemy_ai.detection_range {
-                enemy_ai.player_positions.clear();
-                enemy_ai.current_target_index = 0;
-            } else {
-                // Record positions when far - check if this position is significantly different
-                let is_new_position = enemy_ai.player_positions.last()
-                    .map_or(true, |last_pos| {
-                        // Check both horizontal distance and height difference
-                        let horizontal_dist = Vec2::new(player_pos.x - last_pos.x, player_pos.z - last_pos.z).length();
-                        let height_diff = (player_pos.y - last_pos.y).abs();
-                        horizontal_dist > 1.5 || height_diff > 0.5
-                    });
+            // Only add if position is different enough from last recorded position
+            let should_record = path_follower.player_path.last()
+                .map_or(true, |last_pos| last_pos.distance(player_pos) > 0.8);
+            
+            if should_record {
+                path_follower.player_path.push(player_pos);
                 
-                if is_new_position {
-                    // Add current player position
-                    enemy_ai.player_positions.push(player_pos);
-                    
-                    // Limit stored positions to prevent memory growth
-                    if enemy_ai.player_positions.len() > 20 {
-                        enemy_ai.player_positions.remove(0);
-                        if enemy_ai.current_target_index > 0 {
-                            enemy_ai.current_target_index -= 1;
-                        }
-                    }
+                // Keep memory efficient - limit to 50 positions max
+                if path_follower.player_path.len() > 50 {
+                    path_follower.player_path.remove(0);
+                }
+                
+                // Log occasionally for debugging
+                if path_follower.player_path.len() % 10 == 0 {
+                    info!("Enemy path following: {} positions in queue", path_follower.player_path.len());
                 }
             }
             
-            enemy_ai.last_record_time = current_time;
+            path_follower.last_record_time = current_time;
         }
     }
 }
 
-/// System that handles enemy movement towards the player
-fn enemy_ai_movement(
+/// Enemy follows the recorded player path
+fn follow_player_path(
     time: Res<Time>,
-    mut enemy_query: Query<(Entity, &mut Transform, &mut EnemyAI, &mut AnimationState), (With<Enemy>, Without<crate::systems::character_controller::CharacterController>)>,
+    mut enemy_query: Query<(&mut Transform, &mut PathFollower, &mut AnimationState), With<Enemy>>,
     player_query: Query<&Transform, (With<crate::systems::character_controller::CharacterController>, Without<Enemy>)>,
-    boundary_constraint: Option<Res<BoundaryConstraint>>,
 ) {
     let delta_time = time.delta_secs();
     
-    // Find the player
+    // Get player position for proximity check
     let Ok(player_transform) = player_query.single() else {
         return;
     };
-
-    // Get boundary constraint if available
-    let Some(boundary_constraint) = boundary_constraint else {
-        return; // No boundary constraints, skip boundary checking
-    };
-
-    for (_enemy_id, mut enemy_transform, mut enemy_ai, mut animation_state) in &mut enemy_query {
-        let player_pos = player_transform.translation;
-        let enemy_pos = enemy_transform.translation;
-        let distance_to_player = enemy_pos.distance(player_pos);
-
-        // Update stuck detection
-        let distance_moved = enemy_pos.distance(enemy_ai.last_position);
-        if distance_moved < enemy_ai.stuck_threshold {
-            enemy_ai.stuck_time += delta_time;
-        } else {
-            enemy_ai.stuck_time = 0.0;
+    let player_pos = player_transform.translation;
+    
+    for (mut transform, mut path_follower, mut animation_state) in &mut enemy_query {
+        let current_pos = transform.translation;
+        let distance_to_player = current_pos.distance(player_pos);
+        
+        // Stop moving if within 5 units of player
+        if distance_to_player <= 5.0 {
+            path_follower.is_moving = false;
+            animation_state.forward_hold_time = 0.0;
+            // Log occasionally when stopped due to proximity
+            if (time.elapsed_secs() * 10.0) as i32 % 30 == 0 {
+                info!("Enemy stopped - too close to player ({:.1} units)", distance_to_player);
+            }
+            continue;
         }
-        enemy_ai.last_position = enemy_pos;
-
-        // Determine target position
-        let target_pos = if distance_to_player <= enemy_ai.detection_range {
-            // Directly chase player when close
-            player_pos
-        } else if !enemy_ai.player_positions.is_empty() {
-            // Follow recorded path when far
-            let current_index = enemy_ai.current_target_index.min(enemy_ai.player_positions.len() - 1);
-            enemy_ai.player_positions[current_index]
-        } else {
-            // No target if no path and too far
-            enemy_pos
-        };
-
-        // Calculate movement
-        let direction = target_pos - enemy_pos;
+        
+        // Check if we have a path to follow
+        if path_follower.player_path.is_empty() {
+            path_follower.is_moving = false;
+            animation_state.forward_hold_time = 0.0;
+            continue;
+        }
+        
+        // Get the next position to move towards (first in queue)
+        let target_pos = path_follower.player_path[0];
+        let direction = target_pos - current_pos;
         let distance = direction.length();
         
-        // Handle close-range behavior
-        let min_distance = 4.0;
-        let should_move = if distance_to_player <= enemy_ai.detection_range {
-            // Direct chase mode - maintain minimum distance
-            distance_to_player > min_distance
-        } else {
-            // Path following mode - always move towards target
-            distance > 0.5
-        };
-
-        if should_move && distance > 0.1 {
-            // Calculate movement direction
-            let move_direction = direction / distance;
-            let movement_speed = if distance_to_player < min_distance + 2.0 {
-                // Slow down when getting close
-                enemy_ai.move_speed * 0.3
-            } else {
-                enemy_ai.move_speed
-            };
-            
-            // Calculate movement for this frame
-            let movement = move_direction * movement_speed * delta_time;
-            
-            // Check boundary constraints
-            let proposed_pos = enemy_pos + movement;
-            let mut final_movement = movement;
-            
-            // Clamp to boundaries
-            if proposed_pos.x < boundary_constraint.min_x || proposed_pos.x > boundary_constraint.max_x {
-                final_movement.x = 0.0;
-            }
-            if proposed_pos.z < boundary_constraint.min_z || proposed_pos.z > boundary_constraint.max_z {
-                final_movement.z = 0.0;
-            }
-            
-            // Apply movement directly to transform (kinematic body)
-            enemy_transform.translation += final_movement;
-            enemy_ai.is_moving = true;
-            
-            // Face movement direction
-            if final_movement.length() > 0.01 {
-                let look_direction = Vec2::new(final_movement.x, final_movement.z).normalize();
-                let target_rotation = Quat::from_rotation_arc(Vec3::Z, Vec3::new(look_direction.x, 0.0, look_direction.y));
-                enemy_transform.rotation = enemy_transform.rotation.slerp(target_rotation, 5.0 * delta_time);
-            }
-        } else {
-            enemy_ai.is_moving = false;
+        // If we're close enough to the target, remove it from queue and continue
+        if distance < 1.2 {
+            path_follower.player_path.remove(0); // Memory efficient - remove consumed position
+            continue;
         }
-
-        // Handle path progression for recorded positions
-        if !enemy_ai.player_positions.is_empty() && distance_to_player > enemy_ai.detection_range {
-            let current_index = enemy_ai.current_target_index.min(enemy_ai.player_positions.len() - 1);
-            let current_target = enemy_ai.player_positions[current_index];
-            
-            // Check if we've reached the current target
-            let distance_to_target = enemy_pos.distance(current_target);
-            if distance_to_target < enemy_ai.position_reached_threshold {
-                // Move to next position
-                if current_index < enemy_ai.player_positions.len() - 1 {
-                    enemy_ai.current_target_index = current_index + 1;
-                }
-            }
-        }
-
-        // Update animation state
-        if enemy_ai.is_moving {
-            animation_state.forward_hold_time += delta_time;
-        } else {
-            animation_state.forward_hold_time = 0.0;
+        
+        // Move towards the target
+        let move_direction = direction / distance;
+        let movement = move_direction * path_follower.move_speed * delta_time;
+        
+        // Apply movement
+        transform.translation += movement;
+        path_follower.is_moving = true;
+        animation_state.forward_hold_time += delta_time;
+        
+        // Face movement direction
+        let look_direction = Vec2::new(movement.x, movement.z);
+        if look_direction.length() > 0.01 {
+            let look_direction = look_direction.normalize();
+            let target_rotation = Quat::from_rotation_arc(Vec3::Z, Vec3::new(look_direction.x, 0.0, look_direction.y));
+            transform.rotation = transform.rotation.slerp(target_rotation, 8.0 * delta_time);
         }
     }
 }
 
 /// System that handles enemy animations
-fn enemy_ai_animations(
-    mut enemy_query: Query<(&mut GltfAnimations, &mut AnimationState, &EnemyAI), (With<Enemy>, Without<crate::systems::character_controller::CharacterController>)>,
+fn enemy_animations(
+    mut enemy_query: Query<(&mut GltfAnimations, &mut AnimationState, &PathFollower), (With<Enemy>, Without<crate::systems::character_controller::CharacterController>)>,
     mut animation_players: Query<&mut AnimationPlayer>,
 ) {
-    for (mut animations, mut animation_state, enemy_ai) in &mut enemy_query {
-        // Use AI state directly - much simpler and more reliable
-        let is_moving = enemy_ai.is_moving;
-        
-        // Determine target animation based on state - match player logic exactly
-        let target_animation = if !is_moving {
-            1 // Idle animation when not moving (same as player's gameplay idle)
+    for (mut animations, mut animation_state, path_follower) in &mut enemy_query {
+        // Determine target animation based on movement state
+        let target_animation = if path_follower.is_moving {
+            4 // Walking animation when moving
         } else {
-            4 // Walking animation when moving (try animation 4 for enemy)
+            1 // Idle animation when not moving
         };
 
-        // Only change animation if we need to - no timer, immediate switching like player
+        // Only change animation if needed
         if target_animation != animation_state.current_animation {
             if let Some(animation) = animations.get_by_number(target_animation) {
                 if let Ok(mut player) = animation_players.get_mut(animations.animation_player) {
