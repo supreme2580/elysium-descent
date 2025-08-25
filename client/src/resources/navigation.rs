@@ -35,38 +35,50 @@ impl NavigationData {
     pub fn find_path_to_target(&self, start: Vec3, target: Vec3, max_points: usize) -> Vec<Vec3> {
         let mut path = Vec::new();
         
+        // Always start with current position
+        path.push(start);
+        
         // Find nearest nav points to start and target
         let start_point = self.find_nearest_point(start);
         let target_point = self.find_nearest_point(target);
         
+        // Get path points
         if let (Some(start), Some(target)) = (start_point, target_point) {
-            // Find nav points between start and target
             let start_idx = self.nav_points.iter().position(|p| p.position == start.position).unwrap_or(0);
             let target_idx = self.nav_points.iter().position(|p| p.position == target.position).unwrap_or(0);
             
-            // Determine direction of path
-            let (from_idx, to_idx) = if start_idx <= target_idx {
-                (start_idx, target_idx)
+            // Get all points between start and target
+            let points: Vec<_> = if start_idx <= target_idx {
+                self.nav_points[start_idx..=target_idx].iter().map(|p| p.position).collect()
             } else {
-                (target_idx, start_idx)
+                // Reverse path if target is before start
+                self.nav_points[target_idx..=start_idx].iter().rev().map(|p| p.position).collect()
             };
             
-            // Get subset of points
-            let points_between: Vec<_> = self.nav_points[from_idx..=to_idx]
-                .iter()
-                .map(|p| p.position)
-                .collect();
+            // Sample points to create a smoother path
+            if points.len() > max_points {
+                let step = points.len() / max_points;
+                path.extend(points.iter().step_by(step).cloned());
+            } else {
+                path.extend(points);
+            }
+        } else {
+            // If no nav points found, create a direct path with interpolated points
+            let distance = start.distance(target);
+            let point_count = (distance / 5.0).ceil() as usize; // One point every 5 units
             
-            // Sample points to match max_points
-            let step = (points_between.len() as f32 / max_points as f32).max(1.0) as usize;
-            path = points_between.iter()
-                .step_by(step)
-                .cloned()
-                .collect();
+            for i in 1..point_count {
+                let t = i as f32 / point_count as f32;
+                let point = start.lerp(target, t);
+                path.push(point);
+            }
         }
         
-        // Always include target position
-        path.push(target);
+        // Always include target position if not already included
+        if path.last() != Some(&target) {
+            path.push(target);
+        }
+        
         path
     }
 }

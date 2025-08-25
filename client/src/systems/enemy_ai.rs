@@ -3,6 +3,7 @@ use bevy_gltf_animation::prelude::*;
 use avian3d::{math::*, prelude::*};
 use crate::systems::character_controller::AnimationState;
 use crate::systems::boundary::BoundaryConstraint;
+use crate::resources::navigation::NavigationData;
 
 /// Marker component for enemy entities
 #[derive(Component)]
@@ -11,12 +12,9 @@ pub struct Enemy;
 /// Component to track enemy AI state
 #[derive(Component)]
 pub struct EnemyAI {
-    pub attack_range: f32,
     pub move_speed: f32,
     pub is_moving: bool,
     pub detection_range: f32,
-    pub last_attack_time: f32,
-    pub attack_cooldown: f32,
     pub path_memory: Vec<Vec3>, // Store player positions for pathfinding
     pub max_path_memory: usize, // Maximum number of positions to remember
     pub current_target_index: usize, // Current target in path memory
@@ -29,19 +27,16 @@ pub struct EnemyAI {
 impl Default for EnemyAI {
     fn default() -> Self {
         Self {
-            attack_range: 3.0,
-            move_speed: 2.5, // Slightly slower than player for better gameplay
+            move_speed: 3.0, // Increased speed for better pursuit
             is_moving: false,
-            detection_range: 15.0, // Detect player from further away
-            last_attack_time: 0.0,
-            attack_cooldown: 2.0, // 2 seconds between attacks
+            detection_range: 25.0, // Increased detection range
             path_memory: Vec::new(),
-            max_path_memory: 20, // Remember last 20 player positions
+            max_path_memory: 30, // Increased path memory for smoother paths
             current_target_index: 0,
             stuck_time: 0.0,
-            max_stuck_time: 3.0, // 3 seconds before recalculating path
+            max_stuck_time: 1.5, // Reduced time before recalculating path
             last_position: Vec3::ZERO,
-            stuck_threshold: 0.5, // Consider stuck if moved less than 0.5 units
+            stuck_threshold: 0.3, // Reduced threshold for more responsive stuck detection
         }
     }
 }
@@ -88,14 +83,17 @@ pub struct EnemyAIPlugin;
 
 impl Plugin for EnemyAIPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (
-                record_player_path,
-                enemy_ai_movement,
-                enemy_ai_animations,
-            ).chain(),
-        );
+        app
+            .init_resource::<NavigationData>()
+            .add_systems(Startup, crate::systems::nav_loader::load_navigation_data)
+            .add_systems(
+                Update,
+                (
+                    record_player_path,
+                    enemy_ai_movement,
+                    enemy_ai_animations,
+                ).chain(),
+            );
     }
 }
 
@@ -128,16 +126,17 @@ fn record_player_path(
 /// System that handles enemy movement towards the player
 fn enemy_ai_movement(
     time: Res<Time>,
-    mut enemy_query: Query<(&mut Transform, &mut LinearVelocity, &mut EnemyAI, &mut AnimationState), (With<Enemy>, Without<crate::systems::character_controller::CharacterController>)>,
-    player_query: Query<&Transform, (With<crate::systems::character_controller::CharacterController>, Without<Enemy>)>,
+    mut enemy_query: Query<(Entity, &mut Transform, &mut LinearVelocity, &mut EnemyAI, &mut AnimationState), (With<Enemy>, Without<crate::systems::character_controller::CharacterController>)>,
+    player_query: Query<(Entity, &Transform), (With<crate::systems::character_controller::CharacterController>, Without<Enemy>)>,
     boundary_constraint: Option<Res<BoundaryConstraint>>,
     spatial_query: SpatialQuery,
+    nav_data: Res<NavigationData>,
 ) {
     let delta_time = time.delta_secs();
     let _current_time = time.elapsed_secs();
     
     // Find the player
-    let Ok(player_transform) = player_query.single() else {
+    let Ok((player_id, player_transform)) = player_query.single() else {
         return;
     };
 
@@ -148,7 +147,7 @@ fn enemy_ai_movement(
         return; // No boundary constraints, skip boundary checking
     };
 
-    for (mut enemy_transform, mut enemy_velocity, mut enemy_ai, mut animation_state) in &mut enemy_query {
+    for (enemy_id, mut enemy_transform, mut enemy_velocity, mut enemy_ai, mut animation_state) in &mut enemy_query {
         let player_pos = player_transform.translation;
         let enemy_pos = enemy_transform.translation;
         let distance_to_player = enemy_pos.distance(player_pos);
@@ -187,22 +186,165 @@ fn enemy_ai_movement(
             // Player is not too close - always follow regardless of distance
             enemy_ai.is_moving = true;
                 
-                // Determine target position - use path memory if available and not stuck
-                let target_pos = if !enemy_ai.path_memory.is_empty() && enemy_ai.stuck_time < enemy_ai.max_stuck_time {
-                    // Use path memory for intelligent following
-                    let path_index = enemy_ai.current_target_index.min(enemy_ai.path_memory.len() - 1);
-                    enemy_ai.path_memory[path_index]
+                // Check if player has moved significantly
+                let player_moved = if let Some(last_pos) = enemy_ai.path_memory.last() {
+                    player_pos.distance(*last_pos) > 1.0 // Only consider significant movement
                 } else {
-                    // Direct line to player if stuck or no path memory
+                    true // If no previous position, consider it as moved
+                };
+
+                // Check if we need to recalculate path - only check every 3 seconds
+                let should_recalculate = time.elapsed_secs() % 3.0 < delta_time && (
+                    enemy_ai.path_memory.is_empty() 
+                    || enemy_ai.stuck_time >= enemy_ai.max_stuck_time
+                    || (enemy_ai.current_target_index >= enemy_ai.path_memory.len() - 1 && player_moved) // Only recalculate at end of path if player moved
+                    || (player_pos.distance(enemy_pos) > enemy_ai.detection_range * 1.5 && player_moved) // Only recalculate if player is far AND moved
+                );
+
+                if should_recalculate {
+                    // Get new path from current position to player
+                    let path = nav_data.find_path_to_target(enemy_pos, player_pos, enemy_ai.max_path_memory);
+                    
+                    info!("AI Movement - Enemy[{:?}] recalculating path:", enemy_id);
+                    info!("  Player[{:?}] pos: ({:.1}, {:.1}, {:.1})", player_id, player_pos.x, player_pos.y, player_pos.z);
+                    info!("  Enemy pos: ({:.1}, {:.1}, {:.1})", enemy_pos.x, enemy_pos.y, enemy_pos.z);
+                    info!("  Distance to player: {:.1}", distance_to_player);
+                    info!("  Path points: {}", path.len());
+                    for (i, point) in path.iter().enumerate() {
+                        info!("    Point {}: ({:.1}, {:.1}, {:.1})", i, point.x, point.y, point.z);
+                    }
+                    
+                    enemy_ai.path_memory = path;
+                    enemy_ai.current_target_index = 0;
+                    enemy_ai.stuck_time = 0.0;
+                }
+                
+                // Get current target position from path
+                let target_pos = if !enemy_ai.path_memory.is_empty() {
+                    let path_index = enemy_ai.current_target_index.min(enemy_ai.path_memory.len() - 1);
+                    let current_target = enemy_ai.path_memory[path_index];
+                    
+                    // Check if we're at the last point in the path
+                    let is_last_point = path_index == enemy_ai.path_memory.len() - 1;
+                    let distance_to_player = enemy_pos.distance(player_pos);
+                    
+                    // If at last point, check player distance
+                    if is_last_point {
+                        if distance_to_player < enemy_ai.detection_range {
+                            // Close enough to target player directly
+                            player_pos
+                        } else {
+                            // Too far, stay at current point until player moves
+                            current_target
+                        }
+                    } else {
+                                                // Move to next point if close enough to current target
+                    let dist_to_target = enemy_pos.distance(current_target);
+                    let dist_to_next = if path_index + 1 < enemy_ai.path_memory.len() {
+                        enemy_pos.distance(enemy_ai.path_memory[path_index + 1])
+                    } else {
+                        f32::MAX
+                    };
+                    
+                    // Transition to next point if:
+                    // 1. Close enough to current target OR
+                    // 2. Closer to next target than current target OR
+                    // 3. Been at current target too long OR
+                    // 4. Moving away from target
+                    let moving_away = {
+                        let current_dist = enemy_pos.distance(current_target);
+                        let prev_dist = enemy_ai.last_position.distance(current_target);
+                        current_dist > prev_dist
+                    };
+                    
+                    if dist_to_target < 1.0 || // Distance threshold
+                       (dist_to_next < dist_to_target && dist_to_next < enemy_ai.detection_range) ||
+                       enemy_ai.stuck_time > 0.5 || // Stuck time threshold
+                       moving_away { // Moving away from target
+                        let next_index = (path_index + 1).min(enemy_ai.path_memory.len() - 1);
+                        
+                        info!("AI Movement - Enemy[{:?}] reached waypoint:", enemy_id);
+                        info!("  Current pos: ({:.1}, {:.1}, {:.1})", enemy_pos.x, enemy_pos.y, enemy_pos.z);
+                        info!("  Moving to next point: {} -> {}", path_index, next_index);
+                        info!("  Distance to current: {:.1}, Distance to next: {:.1}", dist_to_target, dist_to_next);
+                        info!("  Stuck time: {:.1}", enemy_ai.stuck_time);
+                        info!("  Moving away: {}", moving_away);
+                        enemy_ai.current_target_index = next_index;
+                        enemy_ai.stuck_time = 0.0; // Reset stuck timer when reaching waypoint
+                    }
+                    
+                    // Log movement progress
+                    if time.elapsed_secs() % 1.0 < delta_time { // Log every second
+                        info!("AI Movement - Enemy[{:?}] status:", enemy_id);
+                        info!("  Current pos: ({:.1}, {:.1}, {:.1})", enemy_pos.x, enemy_pos.y, enemy_pos.z);
+                        info!("  Target pos: ({:.1}, {:.1}, {:.1})", current_target.x, current_target.y, current_target.z);
+                        info!("  Distance to target: {:.1}", dist_to_target);
+                        info!("  Current waypoint: {}/{}", path_index + 1, enemy_ai.path_memory.len());
+                        info!("  Stuck time: {:.1}", enemy_ai.stuck_time);
+                    }
+                    
+                    current_target
+                    }
+                } else {
+                    // This should never happen with improved pathfinding
                     player_pos
                 };
                 
-                let direction_to_target = (target_pos - enemy_pos).normalize();
-                let target_velocity = direction_to_target * enemy_ai.move_speed;
+                // Calculate direction and velocity
+                let direction = target_pos - enemy_pos;
+                let distance = direction.length();
+                
+                // Calculate normalized direction and target velocity
+                let (direction_normalized, target_velocity) = if distance > 0.1 {
+                    let dir_norm = direction / distance; // Manual normalization
+                    
+                    // Always move at full speed to follow path
+                    let target_vel = dir_norm * enemy_ai.move_speed;
+                    (dir_norm, target_vel)
+                } else {
+                    (Vec3::ZERO, Vec3::ZERO)
+                };
+                
+                // Apply velocity
+                if distance > 0.1 {
+                    // Set linear velocity directly
+                    enemy_velocity.x = target_velocity.x;
+                    enemy_velocity.y = 0.0;
+                    enemy_velocity.z = target_velocity.z;
+                    enemy_ai.is_moving = true;
+                    
+                    // Log movement for debugging - only every 3 seconds
+                    if time.elapsed_secs() % 3.0 < delta_time {
+                        info!("AI Movement - Enemy[{:?}] movement:", enemy_id);
+                        info!("  Current pos: ({:.1}, {:.1}, {:.1})", enemy_pos.x, enemy_pos.y, enemy_pos.z);
+                        info!("  Target pos: ({:.1}, {:.1}, {:.1})", target_pos.x, target_pos.y, target_pos.z);
+                        info!("  Distance: {:.1}", distance);
+                        info!("  Velocity: ({:.1}, {:.1}, {:.1})", enemy_velocity.x, enemy_velocity.y, enemy_velocity.z);
+                    }
+                } else {
+                    // Stop if we're at the target
+                    enemy_velocity.x = 0.0;
+                    enemy_velocity.y = 0.0;
+                    enemy_velocity.z = 0.0;
+                    enemy_ai.is_moving = false;
+                }
+                
+                // Log velocity for debugging - only every 3 seconds
+                if time.elapsed_secs() % 3.0 < delta_time {
+                    info!("AI Movement - Enemy[{:?}] velocity:", enemy_id);
+                    info!("  Direction: ({:.1}, {:.1}, {:.1})", direction_normalized.x, direction_normalized.y, direction_normalized.z);
+                    info!("  Target velocity: ({:.1}, {:.1}, {:.1})", target_velocity.x, target_velocity.y, target_velocity.z);
+                    info!("  Applied velocity: ({:.1}, {:.1}, {:.1})", enemy_velocity.x, enemy_velocity.y, enemy_velocity.z);
+                    info!("  Distance to target: {:.1}", distance);
+                    
+                    info!("AI Movement - Enemy[{:?}] status:", enemy_id);
+                    info!("  Current pos: ({:.1}, {:.1}, {:.1})", enemy_pos.x, enemy_pos.y, enemy_pos.z);
+                    info!("  Current velocity: ({:.1}, {:.1}, {:.1})", enemy_velocity.x, enemy_velocity.y, enemy_velocity.z);
+                }
                 
                 // Check for wall collisions using spatial query
                 let ray_start = enemy_pos;
-                let ray_direction = Dir3::new(Vec3::new(target_velocity.x, 0.0, target_velocity.z).normalize()).unwrap_or(Dir3::Y);
+                let ray_direction = Dir3::new(Vec3::new(enemy_velocity.x, 0.0, enemy_velocity.z).normalize()).unwrap_or(Dir3::Y);
                 let ray_distance = enemy_ai.move_speed * delta_time;
                 
                 let hit = spatial_query.cast_ray(
@@ -213,7 +355,7 @@ fn enemy_ai_movement(
                     &SpatialQueryFilter::default(),
                 );
                 
-                let mut final_velocity = target_velocity;
+                let mut final_velocity = Vec3::new(enemy_velocity.x, enemy_velocity.y, enemy_velocity.z);
                 
                 // If we hit a wall, try to find an alternative path
                 if let Some(_hit) = hit {
@@ -254,7 +396,7 @@ fn enemy_ai_movement(
                         final_velocity = perpendicular2.as_vec3() * enemy_ai.move_speed;
                     } else {
                         // Both directions blocked, reduce speed and try to push through
-                        final_velocity = target_velocity * 0.3;
+                        final_velocity = final_velocity * 0.3;
                     }
                 }
                 
