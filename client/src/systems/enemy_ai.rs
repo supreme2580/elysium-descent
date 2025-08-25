@@ -28,7 +28,7 @@ pub struct EnemyAI {
 impl Default for EnemyAI {
     fn default() -> Self {
         Self {
-            move_speed: 5.0, // Increased speed for better following
+            move_speed: 4.5, // Slightly slower than player's base speed
             is_moving: false,
             detection_range: 30.0, // Increased range to track player better
             player_positions: Vec::new(),
@@ -170,17 +170,30 @@ fn enemy_ai_movement(
         }
         enemy_ai.last_position = enemy_pos;
 
-        // Always act on player - no distance limitation
-        // Check if player is too close (within 5 units) - be idle
-        if distance_to_player <= 5.0 {
-            // Too close - be idle and face player
-            enemy_ai.is_moving = false;
+        // Handle close-range behavior with smooth transitions
+        let close_range = 7.0; // Increased range for smoother transitions
+        let min_distance = 4.0; // Minimum distance to maintain
+        
+        if distance_to_player <= close_range {
+            // Calculate how close we are to the minimum distance
+            let distance_factor = ((distance_to_player - min_distance) / (close_range - min_distance))
+                .clamp(0.0, 1.0);
             
-            // Stop movement
-            enemy_velocity.x = 0.0;
-            enemy_velocity.z = 0.0;
+            // If we're closer than minimum distance, back up slightly
+            if distance_to_player < min_distance {
+                let back_direction = (enemy_pos - player_pos).normalize();
+                enemy_velocity.x = back_direction.x * enemy_ai.move_speed * 0.5;
+                enemy_velocity.z = back_direction.z * enemy_ai.move_speed * 0.5;
+                enemy_ai.is_moving = true;
+            } else {
+                // Between min_distance and close_range - move slower
+                let direction_to_player = (player_pos - enemy_pos).normalize();
+                enemy_velocity.x = direction_to_player.x * enemy_ai.move_speed * distance_factor * 0.3;
+                enemy_velocity.z = direction_to_player.z * enemy_ai.move_speed * distance_factor * 0.3;
+                enemy_ai.is_moving = distance_factor > 0.1;
+            }
+            
             enemy_velocity.y = 0.0;
-            animation_state.forward_hold_time = 0.0;
             
             // Face the player
             let direction_to_player = (player_pos - enemy_pos).normalize();
